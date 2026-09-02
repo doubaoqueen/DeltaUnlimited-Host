@@ -1,0 +1,78 @@
+{
+  "schema_version": 2,
+  "分辨率": { "width": 1920, "height": 1080 },
+  "说明": "游戏操作表（跑刀子集）：从 docs/key-operation.json 全量按键中提取的、跑刀流程需要的部分。节点和 Agent 从这里取键位，不写死在代码里。",
+
+  "按键映射": {
+    "move_forward": "w",
+    "move_back": "s",
+    "move_left": "a",
+    "move_right": "d",
+    "sprint": "shift",
+    "auto_run": "=",
+    "silent_step": "capslock",
+    "crouch": "c",
+    "prone": "z",
+    "jump": "space",
+    "interact": "f",
+    "quick_pickup": "ctrl+left",
+    "inventory": "tab",
+    "map": "m",
+    "close_panel": "esc",
+    "drop_item": "alt+d",
+    "knife": "3",
+    "heal_wheel": "5"
+  },
+
+  "界面坐标点说明": "坐标已迁移到 data/elements.json（统一元素识别表，DetectElement 节点用），本表只保留键位与复合动作。",
+
+  "复合动作": {
+    "pick_up": {
+      "note": "拾取物品：移动到目标 + 按交互键 F",
+      "steps": [
+        { "op": "move_to", "x": "target.x", "y": "target.y" },
+        { "op": "key", "key": "interact" },
+        { "op": "wait", "seconds": 0.5 }
+      ]
+    },
+    "quick_pickup_in_bag": {
+      "note": "对局中快速收物资：Ctrl+左键（背包技巧，配合拾取循环用）",
+      "steps": [
+        { "op": "key_combo", "keys": ["ctrl", "left"] },
+        { "op": "wait", "seconds": 0.2 }
+      ]
+    },
+    "open_inventory": {
+      "note": "打开背包",
+      "steps": [ { "op": "key", "key": "inventory" } ]
+    },
+    "open_map": {
+      "note": "打开大地图（看撤离点）",
+      "steps": [ { "op": "key", "key": "map" } ]
+    },
+    "auto_run_toggle": {
+      "note": "切换自动奔跑（长距离移动省心）",
+      "steps": [ { "op": "key", "key": "auto_run" } ]
+    },
+    "silent_move": {
+      "note": "静步移动（压低脚步声，避战用）",
+      "steps": [
+        { "op": "key_down", "key": "silent_step" },
+        { "op": "move_hold", "direction": "forward", "seconds": 2.0 },
+        { "op": "key_up", "key": "silent_step" }
+      ]
+    },
+    "close_popup": {
+      "note": "关闭弹窗（异常/弹窗兜底）",
+      "steps": [ { "op": "key", "key": "close_panel" } ]
+    }
+  },
+
+  "跑刀用不到（保留备查，来源 key-operation.json）": {
+    "战斗类": ["鼠标左键射击", "鼠标右键开镜", "R 换弹", "B 开火模式", "N 瞄具倍率"],
+    "干员技能/道具": ["X 大招", "V 战术道具1", "G 战术道具2", "U 爆闪", "Y 战术配件"],
+    "载具": ["地面载具（可选扩展）", "直升机整套"],
+    "社交/聊天": ["T 语音", "Enter 聊天", "Ctrl+M 屏蔽语音", "F1-F10 大厅功能"],
+    "其他": ["I 检视", "J 枪架", "K 测距", "H 长按交互（搬运/背扶，待定）", "L 任务列表", "P 战备套装"]
+  }
+}

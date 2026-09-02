@@ -1,0 +1,20 @@
+{
+  "name": "跑刀主流程（骨架示意，M1 里程碑完成实现后再运行）",
+  "nodes": {
+    "n1": { "type": "Screenshot", "params": { "mode": "auto" } },
+    "n2": { "type": "TemplateMatch", "params": { "screenshot": "$n1.screen", "template": "assets/templates/loot_box.png" } },
+    "n3": { "type": "IfNode", "params": { "key": "n2.found" } },
+    "n4": { "type": "MouseMove", "params": { "x": "$n2.x", "y": "$n2.y" } },
+    "n5": { "type": "KeyPress", "params": { "key": "f" } },
+    "n6": { "type": "Wait", "params": { "seconds": 0.5 } },
+    "n7": { "type": "Log", "params": { "message": "未发现拾取目标，继续观察" } }
+  },
+  "edges": [
+    { "from": "n1", "to": "n2" },
+    { "from": "n2", "to": "n3" },
+    { "from": "n3.true", "to": "n4" },
+    { "from": "n4", "to": "n5" },
+    { "from": "n5", "to": "n6" },
+    { "from": "n3.false", "to": "n7" }
+  ]
+}

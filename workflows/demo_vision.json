@@ -1,0 +1,23 @@
+{
+  "name": "视觉链路演示（截图→模板匹配→分支→日志，需 opencv + 截图可用）",
+  "nodes": {
+    "v1": { "type": "Screenshot", "params": { "mode": "gdi" } },
+    "v2": {
+      "type": "TemplateMatch",
+      "params": {
+        "screenshot": "$v1.screen",
+        "template": "assets/templates/example_button.png",
+        "threshold": 0.9
+      }
+    },
+    "v3": { "type": "IfNode", "params": { "key": "v2.found" } },
+    "v4": { "type": "Log", "params": { "message": "屏幕上没有该模板（正常，示例模板不会出现在真实屏幕）" } },
+    "v5": { "type": "Log", "params": { "message": "发现目标: ($v2.x, $v2.y) 置信度 $v2.confidence" } }
+  },
+  "edges": [
+    { "from": "v1", "to": "v2" },
+    { "from": "v2", "to": "v3" },
+    { "from": "v3.true", "to": "v5" },
+    { "from": "v3.false", "to": "v4" }
+  ]
+}

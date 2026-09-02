@@ -1,0 +1,97 @@
+{
+  "mouse": [
+    {"input": "鼠标左键", "function": "射击；载具武器开火"},
+    {"input": "鼠标右键", "function": "开镜瞄准；观战切换对象"},
+    {"input": "鼠标滚轮上/下", "function": "切换武器"},
+    {"input": "鼠标滚轮点击", "function": "标记敌人、物资点位"}
+  ],
+  "move_pose": [
+    {"key": "W", "function": "前进"},
+    {"key": "A", "function": "左移"},
+    {"key": "S", "function": "后退"},
+    {"key": "D", "function": "右移"},
+    {"key": "Shift", "function": "冲刺奔跑；开镜按住=屏息稳枪"},
+    {"key": "=", "function": "自动奔跑"},
+    {"key": "Caps Lock", "function": "静步（压低脚步声）"},
+    {"key": "C", "function": "蹲下；降落伞状态收起伞；奔跑状态按C触发滑铲"},
+    {"key": "Z", "function": "卧倒趴地"},
+    {"key": "Space", "function": "跳跃、翻越；跳伞开伞；阵亡放弃救援"},
+    {"key": "Q", "function": "向左探头（掩体左侧身）"},
+    {"key": "E", "function": "向右探头（掩体右侧身）"}
+  ],
+  "weapon": [
+    {"key": "1", "function": "主武器1"},
+    {"key": "2", "function": "主武器2"},
+    {"key": "3", "function": "近战武器"},
+    {"key": "4", "function": "手枪副武器"},
+    {"key": "R", "function": "普通换弹；长按R=快速换弹；对准人物长按R查看名片"},
+    {"key": "B", "function": "切换开火模式（全自动/单发）；载具喇叭"},
+    {"key": "N", "function": "切换瞄具倍率"},
+    {"key": "Y", "function": "开关枪械战术配件（手电、激光，长按弹出选择轮盘）"},
+    {"key": "U", "function": "爆闪手电开关"},
+    {"key": "I", "function": "检视武器"},
+    {"key": "J", "function": "部署枪架（三脚架）"},
+    {"key": "K", "function": "测距仪"}
+  ],
+  "operator_skill": [
+    {"key": "X", "function": "干员终极大招"},
+    {"key": "V", "function": "战术道具1"},
+    {"key": "G", "function": "战术道具2"}
+  ],
+  "interact_ui": [
+    {"key": "F", "function": "万能交互：捡物资、开门、救援、处决、上下载具、破译电脑"},
+    {"key": "H", "function": "长按交互：背扶队友、灭火、搬运物体"},
+    {"key": "5", "function": "医疗道具轮盘"},
+    {"key": "6", "function": "喷枪道具轮盘"},
+    {"key": "Tab", "function": "打开背包；对局计分板"},
+    {"key": "M", "function": "打开大地图"},
+    {"key": "P", "function": "快速切换战备套装"},
+    {"key": "L", "function": "打开任务列表"},
+    {"key": "Enter", "function": "打开聊天输入框"},
+    {"key": "T", "function": "按住小队语音说话"},
+    {"key": "Ctrl+M", "function": "屏蔽全部队友语音"},
+    {"key": "ESC", "function": "关闭弹窗、呼出设置菜单"}
+  ],
+  "bag_hotkey": [
+    {"key": "Ctrl+鼠标左键", "function": "快速拾取/快速移动背包物品"},
+    {"key": "Alt+D", "function": "快速丢弃选中物品"},
+    {"key": "拖动物资+R", "function": "旋转物品摆放角度"}
+  ],
+  "lobby_global": [
+    {"key": "F1", "function": "好友界面"},
+    {"key": "F2", "function": "表情轮盘"},
+    {"key": "F3", "function": "藏品外观页面"},
+    {"key": "F4", "function": "交易行市场"},
+    {"key": "F5", "function": "商城"},
+    {"key": "F6", "function": "通行证"},
+    {"key": "F8", "function": "游戏回放录制（洲洲时刻）"},
+    {"key": "F9", "function": "排行榜"},
+    {"key": "F10", "function": "招募组队界面"}
+  ],
+  "vehicle_ground": [
+    {"key": "W", "function": "前进"},
+    {"key": "S", "function": "后退"},
+    {"key": "A", "function": "左转"},
+    {"key": "D", "function": "右转"},
+    {"key": "空格", "function": "刹车"},
+    {"key": "B", "function": "喇叭"},
+    {"key": "F", "function": "上下车"},
+    {"key": "Ctrl", "function": "载具内探头射击"}
+  ],
+  "vehicle_helicopter": [
+    {"key": "W", "function": "爬升上升"},
+    {"key": "S", "function": "俯冲下降"},
+    {"key": "A", "function": "机身左转向"},
+    {"key": "D", "function": "机身右转向"},
+    {"key": "Q", "function": "机身向左翻滚倾斜"},
+    {"key": "E", "function": "机身向右翻滚倾斜"},
+    {"key": "Shift", "function": "飞行器加力冲刺"},
+    {"input": "鼠标推拉", "function": "控制机头俯仰，控制前进后退"},
+    {"input": "鼠标左键", "function": "机载武器开火"}
+  ],
+  "notes": [
+    "全部按键均可：ESC → 设置 → 操作设置 → 按键设置自定义修改",
+    "滑铲触发条件：Shift奔跑状态下按C",
+    "降落伞：空格开伞，C收伞快速下坠"
+  ]
+}

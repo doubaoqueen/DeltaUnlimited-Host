@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "说明": "界面元素识别表（混合识别策略，BetterGI 式）：语义名 -> 识别策略。workflows 只引用元素名，识别方式在这里切换（coord/template/ocr/color），改识别手段不改流程、不改代码。",
+  "elements": {
+    "hall_match_button": {
+      "note": "大厅-开始匹配按钮（固定 UI，坐标策略）",
+      "strategy": "coord",
+      "params": { "x": null, "y": null }
+    },
+    "matchmaking_state": {
+      "note": "匹配中界面判定（OCR 识别'匹配'相关文字）",
+      "strategy": "ocr",
+      "params": { "keywords": ["匹配"] }
+    },
+    "extract_marker": {
+      "note": "撤离点标记（图标，模板策略；模板待裁剪）",
+      "strategy": "template",
+      "params": { "template": "assets/templates/extract_marker.png", "threshold": 0.8 }
+    },
+    "loot_prompt": {
+      "note": "拾取提示（'按F拾取'提示文字，OCR 策略）",
+      "strategy": "ocr",
+      "params": { "keywords": ["拾取"] }
+    }
+  }
+}

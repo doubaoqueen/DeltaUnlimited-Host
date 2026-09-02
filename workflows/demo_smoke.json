@@ -1,0 +1,24 @@
+{
+  "name": "引擎冒烟演示（纯标准库，无需第三方依赖）",
+  "nodes": {
+    "n1": { "type": "Log", "params": { "message": "引擎启动，开始执行节点图" } },
+    "n2": { "type": "SetValue", "params": { "key": "loop", "value": 3 } },
+    "n3": { "type": "Wait", "params": { "seconds": 0.2 } },
+    "n4": { "type": "Log", "params": { "message": "当前 loop 值 = $loop" } },
+    "n5": { "type": "IfNode", "params": { "key": "loop", "op": "gt", "value": 0 } },
+    "n6": { "type": "Log", "params": { "message": "条件成立：loop > 0，继续" } },
+    "n7": { "type": "SetValue", "params": { "key": "loop", "value": 0 } },
+    "n8": { "type": "IfNode", "params": { "key": "loop", "op": "gt", "value": 0 } },
+    "n9": { "type": "Log", "params": { "message": "条件不成立分支激活（false 分支工作正常）" } }
+  },
+  "edges": [
+    { "from": "n1", "to": "n2" },
+    { "from": "n2", "to": "n3" },
+    { "from": "n3", "to": "n4" },
+    { "from": "n4", "to": "n5" },
+    { "from": "n5.true", "to": "n6" },
+    { "from": "n6", "to": "n7" },
+    { "from": "n7", "to": "n8" },
+    { "from": "n8.false", "to": "n9" }
+  ]
+}
