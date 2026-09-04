@@ -17,6 +17,11 @@ public static class CaptureService
     private const uint DIB_RGB_COLORS = 0;
     private const int SM_CXSCREEN = 0;
     private const int SM_CYSCREEN = 1;
+    private const int HWND_TOPMOST = -1;
+    private const int HWND_NOTOPMOST = -2;
+    private const uint SWP_NOSIZE = 0x0001;
+    private const uint SWP_NOMOVE = 0x0002;
+    private const uint SWP_SHOWWINDOW = 0x0040;
 
     private static bool _dpiDone;
 
@@ -52,10 +57,17 @@ public static class CaptureService
         return list;
     }
 
-    /// <summary>按标题关键字（忽略大小写）找第一个匹配窗口，找不到返回 IntPtr.Zero。</summary>
+    /// <summary>判断窗口标题是否属于控制台宿主（cmd/PowerShell 标题会包含命令行，必须排除）。</summary>
+    private static bool IsConsoleHostTitle(string title) =>
+        title.Contains("cmd.exe", StringComparison.OrdinalIgnoreCase)
+        || title.Contains("powershell", StringComparison.OrdinalIgnoreCase)
+        || title.Contains("windowsterminal", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>按标题关键字（忽略大小写）找第一个匹配窗口，找不到返回 IntPtr.Zero。
+    /// 排除自己的控制台窗口与命令行走廊窗口（标题会显示命令行，容易自匹配）。</summary>
     public static IntPtr FindWindowByTitle(string keyword)
     {
-        var hit = ListTopLevelWindows().FirstOrDefault(w => w.Title.Contains(keyword, StringComparison.OrdinalIgnoreCase));
+        var hit = ListTopLevelWindows().FirstOrDefault(w => w.Hwnd != GetConsoleWindow() && !IsConsoleHostTitle(w.Title) && w.Title.Contains(keyword, StringComparison.OrdinalIgnoreCase));
         return hit.Hwnd;
     }
 
@@ -97,28 +109,65 @@ public static class CaptureService
         }
     }
 
+    /// <summary>窗口在屏幕上的矩形 (X, Y, W, H)（含边框标题栏，调试用）。</summary>
+    public static (int X, int Y, int W, int H)? GetWindowScreenRect(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero) return null;
+        if (!GetWindowRect(hwnd, out RECT r)) return null;
+        return (r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top);
+    }
+
+    /// <summary>把窗口提到最上层（不影响键盘焦点，供截图/点击前使用）。</summary>
+    public static void RaiseWindow(IntPtr hwnd) =>
+        _ = SetWindowPos(hwnd, new IntPtr(HWND_TOPMOST), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+
+    /// <summary>取消窗口的最上层状态，还原普通层级。</summary>
+    public static void UnraiseWindow(IntPtr hwnd) =>
+        _ = SetWindowPos(hwnd, new IntPtr(HWND_NOTOPMOST), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+
     /// <summary>按标题关键字找窗口并截其客户区。</summary>
     public static CaptureOutcome CaptureWindowClient(string titleKeyword, string pngPath)
     {
         EnsureDpiAwareness();
-        IntPtr hwnd = FindWindowByTitle(titleKeyword);
-        if (hwnd == IntPtr.Zero)
+        // 排除自己的控制台窗口（cmd 标题含命令行，会把自己匹配进来）
+        IntPtr ownConsole = GetConsoleWindow();
+        var wins = ListTopLevelWindows();
+        Console.WriteLine($"[debug] 控制台窗口=0x{ownConsole.ToInt64():X}");
+        foreach (var w in wins)
+            Console.WriteLine($"[debug]   0x{w.Hwnd.ToInt64():X}{(w.Hwnd == ownConsole ? " [本控制台]" : "")}  {w.Title}");
+        var hit = wins.FirstOrDefault(w => w.Hwnd != ownConsole && !IsConsoleHostTitle(w.Title) && w.Title.Contains(titleKeyword, StringComparison.OrdinalIgnoreCase));
+        if (hit.Hwnd == IntPtr.Zero)
         {
             var names = string.Join(", ", ListTopLevelWindows().Take(12).Select(w => $"“{w.Title}”"));
             throw new InvalidOperationException($"没找到标题含 “{titleKeyword}” 的窗口。当前可见窗口: {names}");
         }
+        IntPtr hwnd = hit.Hwnd;
 
-        var rect = GetClientScreenRect(hwnd)
+        var client = GetClientScreenRect(hwnd)
             ?? throw new InvalidOperationException("窗口无效或最小化，请还原窗口后重试");
-        IntPtr hdc = GetDC(hwnd);
+        var wnd = GetWindowScreenRect(hwnd);
+        Console.WriteLine($"[debug] 命中窗口: “{hit.Title}”  hwnd=0x{hwnd.ToInt64():X} 窗口矩形={(wnd.HasValue ? $"({wnd.Value.X},{wnd.Value.Y}) {wnd.Value.W}x{wnd.Value.H}" : "?")} 客户区=({client.X},{client.Y}) {client.W}x{client.H}");
+
+        // 截图前把目标窗口提到最上层（否则会被 cmd 等窗口遮挡，截到别人的像素），截完还原
+        Console.WriteLine("[debug] 已把目标窗口提到最上层...");
+        _ = SetWindowPos(hwnd, new IntPtr(HWND_TOPMOST), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+        System.Threading.Thread.Sleep(300);
         try
         {
-            // 源 DC 为窗口 DC，其原点就是客户区左上角
-            return CaptureRegion(hdc, 0, 0, rect.W, rect.H, pngPath);
+            // 源用桌面 DC + 客户区屏幕坐标（不用窗口 DC：部分环境下窗口 DC 拷贝会全黑）
+            IntPtr hdc = GetDC(IntPtr.Zero);
+            try
+            {
+                return CaptureRegion(hdc, client.X, client.Y, client.W, client.H, pngPath);
+            }
+            finally
+            {
+                _ = ReleaseDC(IntPtr.Zero, hdc);
+            }
         }
         finally
         {
-            _ = ReleaseDC(hwnd, hdc);
+            _ = SetWindowPos(hwnd, new IntPtr(HWND_NOTOPMOST), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
         }
     }
 
@@ -150,26 +199,33 @@ public static class CaptureService
             if (hBitmap == IntPtr.Zero) throw new Win32Exception(Marshal.GetLastWin32Error(), "CreateDIBSection 失败");
 
             IntPtr old = SelectObject(memDc, hBitmap);
-            bool ok = BitBlt(memDc, 0, 0, w, h, hdcScreen, srcX, srcY, SRCCOPY | CAPTUREBLT);
-            _ = SelectObject(memDc, old);
-            _ = DeleteObject(hBitmap);
-            if (!ok) throw new Win32Exception(Marshal.GetLastWin32Error(), "BitBlt 失败");
-
-            // DIB 像素 → Mat(CV_8UC4, BGRA) → 存 PNG
-            byte[] buf = new byte[w * h * 4];
-            Marshal.Copy(bits, buf, 0, buf.Length);
-            var handle = GCHandle.Alloc(buf, GCHandleType.Pinned);
             try
             {
-                using var mat = Mat.FromPixelData(h, w, MatType.CV_8UC4, handle.AddrOfPinnedObject(), 0);
-                if (!Cv2.ImWrite(pngPath, mat))
-                    throw new IOException($"保存截图失败: {pngPath}");
-                Scalar mean = Cv2.Mean(mat);
-                return new CaptureOutcome(pngPath, srcX, srcY, w, h, mean[0], mean[1], mean[2]);
+                bool ok = BitBlt(memDc, 0, 0, w, h, hdcScreen, srcX, srcY, SRCCOPY | CAPTUREBLT);
+                if (!ok) throw new Win32Exception(Marshal.GetLastWin32Error(), "BitBlt 失败");
+
+                // DIB 像素 → Mat(CV_8UC4, BGRA) → 存 PNG
+                // 关键：必须在 DeleteObject(hBitmap) 之前拷贝，否则 bits 指向的内存已被释放
+                byte[] buf = new byte[w * h * 4];
+                Marshal.Copy(bits, buf, 0, buf.Length);
+                var handle = GCHandle.Alloc(buf, GCHandleType.Pinned);
+                try
+                {
+                    using var mat = Mat.FromPixelData(h, w, MatType.CV_8UC4, handle.AddrOfPinnedObject(), 0);
+                    if (!Cv2.ImWrite(pngPath, mat))
+                        throw new IOException($"保存截图失败: {pngPath}");
+                    Scalar mean = Cv2.Mean(mat);
+                    return new CaptureOutcome(pngPath, srcX, srcY, w, h, mean[0], mean[1], mean[2]);
+                }
+                finally
+                {
+                    handle.Free();
+                }
             }
             finally
             {
-                handle.Free();
+                _ = SelectObject(memDc, old);
+                _ = DeleteObject(hBitmap);
             }
         }
         finally
@@ -233,6 +289,10 @@ public static class CaptureService
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool ClientToScreen(IntPtr hWnd, ref POINT lpPoint);
 
     [DllImport("user32.dll")]
@@ -246,6 +306,13 @@ public static class CaptureService
 
     [DllImport("user32.dll")]
     private static extern bool SetProcessDpiAwarenessContext(IntPtr value);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint uFlags);
+
+    [DllImport("kernel32.dll")]
+    private static extern IntPtr GetConsoleWindow();
 
     [DllImport("gdi32.dll")]
     private static extern IntPtr CreateCompatibleDC(IntPtr hdc);
