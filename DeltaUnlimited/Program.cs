@@ -43,6 +43,10 @@ try
             RunTurn(root, args);
             break;
 
+        case "drill":
+            RunDrill(store, root, args);
+            break;
+
         case "windows":
             RunListWindows();
             break;
@@ -199,6 +203,100 @@ void RunCapture(string repoRoot, string[] cmdArgs)
     Console.WriteLine("提示: 若疑似黑屏，检查是否窗口化/游戏是否被独占全屏，或换关键字再试");
 }
 
+// ===== 靶场自主行进循环 drill：每步动作帧差确认，失败重试一次后自动中止 =====
+
+void RunDrill(DataStore data, string repoRoot, string[] cmdArgs)
+{
+    int rounds = cmdArgs.Length > 1 && int.TryParse(cmdArgs[1], out int rv) && rv > 0 ? rv : 2;
+    string winKeyword = cmdArgs.Length > 2 ? cmdArgs[2] : "三角洲行动";
+
+    const int fwdMs = 1600;      // 每段冲刺前进时长
+    const int turnPx = 800;      // 每次右转像素量（约 90°，取决于游戏内灵敏度）
+    const double minScore = 3.0; // 帧差阈值：低于此值视为"没动"
+    const int settleMs = 450;    // 动作结束后的稳定等待
+
+    var ops = data.LoadGameOps();
+    string Resolve(string semantic) => ops.KeyMap.GetValueOrDefault(semantic, semantic);
+
+    IntPtr hwnd = CaptureService.FindWindowByTitle(winKeyword);
+    if (hwnd == IntPtr.Zero) throw new InvalidOperationException($"没找到标题含 “{winKeyword}” 的窗口");
+
+    // 急停：Ctrl+C 时先释放所有按键再退出（防止按键卡死）
+    Console.CancelKeyPress += (_, e) =>
+    {
+        e.Cancel = true;
+        InputService.ReleaseAllHeldKeys();
+        Console.WriteLine("\n⛔ 手动急停，已释放所有按键");
+        Environment.Exit(130);
+    };
+
+    Console.WriteLine($"靶场自主行进循环：{rounds} 圈（每圈 = 冲刺前进 + 右转90° 的 4 边回路）");
+    Console.WriteLine("2 秒后开始；Ctrl+C 随时急停；若贴墙/卡住会自动重试后中止。请盯紧屏幕！");
+    Thread.Sleep(2000);
+
+    string fwdKey = Resolve("move_forward");
+    string sprintKey = Resolve("sprint");
+
+    for (int round = 1; round <= rounds; round++)
+    {
+        for (int side = 1; side <= 4; side++)
+        {
+            Console.WriteLine($"\n[第 {round}/{rounds} 圈 · 边 {side}/4]");
+            if (!MotionVerified(hwnd, winKeyword, repoRoot, "冲刺前进", () => InputService.HoldKeys(new[] { fwdKey, sprintKey }, fwdMs), settleMs, minScore))
+                throw new InvalidOperationException("前进两次验证失败，已自动中止（画面未变化：贴墙了？焦点丢了？）");
+            if (!MotionVerified(hwnd, winKeyword, repoRoot, "右转约90°", () => InputService.MoveRelative(turnPx, 0), settleMs, minScore))
+                throw new InvalidOperationException("转向两次验证失败，已自动中止（画面未变化）");
+        }
+        Console.WriteLine($"\n✅ 第 {round} 圈完成");
+    }
+    Console.WriteLine($"\n🎉 自主行进循环完成 {rounds} 圈，共 {rounds * 4} 段动作全部帧差验证通过");
+}
+
+/// <summary>执行一个动作并用帧差验证：失败自动重试一次（重新抢焦点），仍失败则留证据帧并返回 false。</summary>
+bool MotionVerified(IntPtr hwnd, string winKeyword, string repoRoot, string desc, Action action, int settleMs, double minScore)
+{
+    bool RunOnce(string label, out double score)
+    {
+        using var pre = CaptureService.CaptureWindowMat(winKeyword);
+        bool focused = InputService.EnsureForeground(hwnd);
+        Thread.Sleep(250);
+        try
+        {
+            action();
+        }
+        finally
+        {
+            InputService.ReleaseAllHeldKeys();
+        }
+        Thread.Sleep(settleMs);
+        using var post = CaptureService.CaptureWindowMat(winKeyword);
+        score = FrameDiff.Score(pre, post);
+        Console.WriteLine($"  {label}帧差 {score:F2} {(score >= minScore ? "✅" : "❌")}{(focused ? "" : "（⚠️ 焦点丢失）")}");
+        return score >= minScore;
+    }
+
+    Console.WriteLine($"动作: {desc}");
+    if (RunOnce("", out double s1)) return true;
+
+    Console.WriteLine("  第一次未见效果，重试一次...");
+    if (RunOnce("重试", out double s2)) return true;
+
+    // 留证据后判定失败
+    try
+    {
+        string ev = Path.Combine(repoRoot, "screenshots", "captured", $"drill_fail_{DateTime.Now:yyyyMMdd_HHmmss}.png");
+        var d = Path.GetDirectoryName(ev);
+        if (!string.IsNullOrEmpty(d)) Directory.CreateDirectory(d);
+        using var frame = CaptureService.CaptureWindowMat(winKeyword);
+        if (Cv2.ImWrite(ev, frame)) Console.WriteLine($"  证据帧已保存: {ev}");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"  证据保存失败: {ex.Message}");
+    }
+    return false;
+}
+
 void RunListWindows()
 {
     var wins = CaptureService.ListTopLevelWindows();
@@ -287,6 +385,7 @@ void PrintUsage()
           click <元素名> [窗口关键字]        真实点击（点前/点后自动截图，默认 3 秒倒计时）
           hold <键名> <毫秒> [窗口关键字]     长按测试（帧差验证，如: hold move_forward 1500）
           turn <dx> [dy] [窗口关键字]         视角转动测试（帧差验证，如: turn 800 0）
+          drill [圈数] [窗口关键字]           靶场自主行进循环（帧差确认+自动重试+急停）
           windows                           列出可见窗口
         """);
 }

@@ -25,12 +25,14 @@ public static class InputService
 
     private const uint KEYEVENTF_KEYUP = 0x0002;
 
-    private const ushort VK_ALT = 0x12;
+    private const ushort VK_LMENU = 0xA4; // 左 Alt（前置切换用）
 
     private const int SM_CXSCREEN = 0;
     private const int SM_CYSCREEN = 1;
 
     private static readonly Random Rng = new();
+    private static readonly object HeldLock = new();
+    private static readonly HashSet<ushort> HeldKeys = new();
 
     /// <summary>把鼠标移动到屏幕坐标 (x, y) 并左键单击（移动为分段缓动）。</summary>
     public static void ClickAt(int screenX, int screenY)
@@ -110,26 +112,87 @@ public static class InputService
     }
 
     /// <summary>按住一个键约 durationMs 后松开（长按，移动用；时长 ±10% 抖动）。</summary>
-    public static void HoldKey(string key, int durationMs)
+    public static void HoldKey(string key, int durationMs) => HoldKeys(new[] { key }, durationMs);
+
+    /// <summary>同时按住多个键（组合键/移动组合，如 sprint 前进 = ["move_forward", "sprint"]），
+    /// 依次按下 → 保持（时长 ±10% 抖动）→ 逆序松开。任何异常都会确保全部松开。</summary>
+    public static void HoldKeys(IReadOnlyList<string> keys, int durationMs)
     {
-        ushort vk = MapKeyName(key);
-        if (vk == 0) throw new ArgumentException($"不认识的按键名: {key}");
+        if (keys.Count == 0) return;
+        var vks = keys.Select(k => MapKeyName(k)).ToArray();
+        int bad = vks.Count(v => v == 0);
+        if (bad > 0)
+            throw new ArgumentException($"有 {bad} 个不认识的按键名: {string.Join(",", keys.Where((_, i) => vks[i] == 0))}");
+
         int hold = (int)(durationMs * (0.92 + Rng.NextDouble() * 0.16));
-        Console.WriteLine($"[Input] 长按 {key} (VK=0x{vk:X2}) 请求 {durationMs}ms → 实际 {hold}ms");
-        KeyDown(vk);
-        Thread.Sleep(Math.Max(30, hold));
-        KeyUp(vk);
+        Console.WriteLine($"[Input] 组合长按 [{string.Join("+", keys)}] 请求 {durationMs}ms → 实际 {hold}ms");
+        try
+        {
+            foreach (var vk in vks)
+            {
+                KeyDown(vk);
+                Thread.Sleep(Rng.Next(15, 30)); // 依次按下，模拟人手顺序
+            }
+            Thread.Sleep(Math.Max(30, hold));
+        }
+        finally
+        {
+            ReleaseAllHeldKeys(); // 逆序 + 兜底全释放
+        }
     }
 
-    private static void KeyDown(ushort vk) => SendKeyEvent(vk, 0);
-    private static void KeyUp(ushort vk) => SendKeyEvent(vk, KEYEVENTF_KEYUP);
+    /// <summary>释放所有仍处于按下状态的键（急停/异常兜底用，可重复调用）。</summary>
+    public static void ReleaseAllHeldKeys()
+    {
+        ushort[] held;
+        lock (HeldLock)
+        {
+            held = HeldKeys.ToArray();
+        }
+        foreach (var vk in held.Reverse())
+            SendKeyEvent(vk, KEYEVENTF_KEYUP);
+        lock (HeldLock)
+        {
+            HeldKeys.Clear();
+        }
+    }
+
+    private static void KeyDown(ushort vk)
+    {
+        lock (HeldLock)
+        {
+            if (!HeldKeys.Add(vk)) return; // 已在按下状态，避免重复 down
+        }
+        SendKeyEvent(vk, 0);
+    }
+
+    private static void KeyUp(ushort vk)
+    {
+        lock (HeldLock)
+        {
+            if (!HeldKeys.Remove(vk)) return; // 已松开
+        }
+        SendKeyEvent(vk, KEYEVENTF_KEYUP);
+    }
+
+    /// <summary>修饰键用左侧具体键码（VK_LSHIFT/LCONTROL/LMENU）。
+    /// 部分游戏引擎不认通用 VK_SHIFT(0x10)/VK_CONTROL(0x11)/VK_MENU(0x12)，会导致修饰键无效。</summary>
+    private static ushort NormalizeVk(ushort vk) => vk switch
+    {
+        0x10 => 0xA0, // VK_SHIFT   → VK_LSHIFT
+        0x11 => 0xA2, // VK_CONTROL → VK_LCONTROL
+        0x12 => 0xA4, // VK_MENU    → VK_LMENU
+        _ => vk,
+    };
 
     private static void SendKeyEvent(ushort vk, uint flags)
     {
+        vk = NormalizeVk(vk);
+        ushort scan = (ushort)MapVirtualKey(vk, 0); // 自动补扫描码，兼容要求硬件级输入的引擎
         var input = new INPUT
         {
             type = INPUT_KEYBOARD,
-            ki = new KEYBDINPUT { wVk = vk, wScan = 0, dwFlags = flags, time = 0, dwExtraInfo = IntPtr.Zero }
+            ki = new KEYBDINPUT { wVk = vk, wScan = scan, dwFlags = flags, time = 0, dwExtraInfo = IntPtr.Zero }
         };
         Send(ref input);
     }
@@ -143,11 +206,11 @@ public static class InputService
         if (hwnd == IntPtr.Zero) return false;
         if (GetForegroundWindow() == hwnd) return true;
 
-        TapKey(VK_ALT);
+        TapKey(VK_LMENU);
         bool ok = SetForegroundWindow(hwnd);
         if (!ok)
         {
-            TapKey(VK_ALT);
+            TapKey(VK_LMENU);
             ok = SetForegroundWindow(hwnd);
         }
         Thread.Sleep(150);
@@ -297,4 +360,7 @@ public static class InputService
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetCursorPos(out POINT lpPoint);
+
+    [DllImport("user32.dll")]
+    private static extern uint MapVirtualKey(uint uCode, uint uMapType);
 }
