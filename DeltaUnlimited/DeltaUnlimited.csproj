@@ -15,7 +15,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Core\Config\" />
+    <Folder Include="Core\Navigator\" />
+    <Folder Include="Core\Helmsman\" />
+    <Folder Include="Core\Lookout\" />
+    <Folder Include="Core\Shipwright\" />
   </ItemGroup>
 
 </Project>
