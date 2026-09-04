@@ -141,6 +141,23 @@ public static class InputService
         }
     }
 
+    /// <summary>同时按住多个键并保持（不自动松开），供"持续移动"类场景使用；
+    /// 结束前必须调用 <see cref="ReleaseAllHeldKeys"/>（建议配 try/finally 或急停处理）。</summary>
+    public static void PressKeys(IReadOnlyList<string> keys)
+    {
+        if (keys.Count == 0) return;
+        var vks = keys.Select(k => MapKeyName(k)).ToArray();
+        int bad = vks.Count(v => v == 0);
+        if (bad > 0)
+            throw new ArgumentException($"有 {bad} 个不认识的按键名: {string.Join(",", keys.Where((_, i) => vks[i] == 0))}");
+        foreach (var vk in vks)
+        {
+            KeyDown(vk);
+            Thread.Sleep(Rng.Next(15, 30));
+        }
+        Console.WriteLine($"[Input] 持续按住 [{string.Join("+", keys)}]（需手动释放）");
+    }
+
     /// <summary>释放所有仍处于按下状态的键（急停/异常兜底用，可重复调用）。</summary>
     public static void ReleaseAllHeldKeys()
     {

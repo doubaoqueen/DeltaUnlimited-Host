@@ -184,8 +184,9 @@ public static class CaptureService
         return new CaptureOutcome(pngPath, srcX, srcY, w, h, mean[0], mean[1], mean[2]);
     }
 
-    /// <summary>截指定窗口客户区，返回内存中的 BGRA Mat（调用方负责 Dispose）——不落盘，供帧差/识别用。</summary>
-    public static Mat CaptureWindowMat(string titleKeyword)
+    /// <summary>截指定窗口客户区，返回内存中的 BGRA Mat（调用方负责 Dispose）——不落盘，供帧差/识别用。
+    /// raiseAndWait=false 时跳过"置顶+等待"（连续采样提速用，要求窗口已在前台/最上层）。</summary>
+    public static Mat CaptureWindowMat(string titleKeyword, bool raiseAndWait = true)
     {
         EnsureDpiAwareness();
         IntPtr hwnd = FindWindowByTitle(titleKeyword);
@@ -195,8 +196,11 @@ public static class CaptureService
         var client = GetClientScreenRect(hwnd)
             ?? throw new InvalidOperationException("窗口无效或最小化，请还原窗口后重试");
 
-        RaiseWindow(hwnd);
-        System.Threading.Thread.Sleep(300);
+        if (raiseAndWait)
+        {
+            RaiseWindow(hwnd);
+            System.Threading.Thread.Sleep(150);
+        }
         try
         {
             IntPtr hdc = GetDC(IntPtr.Zero);
@@ -211,7 +215,7 @@ public static class CaptureService
         }
         finally
         {
-            UnraiseWindow(hwnd);
+            if (raiseAndWait) UnraiseWindow(hwnd);
         }
     }
 
