@@ -2,6 +2,7 @@ using DeltaUnlimited.Capture;
 using DeltaUnlimited.Data;
 using DeltaUnlimited.Input;
 using DeltaUnlimited.Vision;
+using OpenCvSharp;
 
 // ===== DeltaUnlimited 开发期 CLI =====
 // 用法：
@@ -32,6 +33,14 @@ try
 
         case "click":
             RunClick(store, root, args);
+            break;
+
+        case "hold":
+            RunHold(store, root, args);
+            break;
+
+        case "turn":
+            RunTurn(root, args);
             break;
 
         case "windows":
@@ -203,6 +212,71 @@ void RunListWindows()
         Console.WriteLine($"  0x{w.Hwnd.ToInt64():X}  {w.Title}");
 }
 
+// ===== 靶场动作测试（hold/turn）：动作前后各取一帧（内存），帧差自动判断是否生效 =====
+
+void RunHold(DataStore data, string repoRoot, string[] cmdArgs)
+{
+    if (cmdArgs.Length < 3) throw new ArgumentException("用法: hold <键名或语义键> <毫秒> [窗口关键字(默认 三角洲行动)]");
+    string keyArg = cmdArgs[1];
+    if (!int.TryParse(cmdArgs[2], out int ms) || ms <= 0) throw new ArgumentException("时长需为正整数毫秒");
+    string winKeyword = cmdArgs.Length > 3 ? cmdArgs[3] : "三角洲行动";
+
+    string key = data.LoadGameOps().KeyMap.GetValueOrDefault(keyArg, keyArg);
+    RunInputProbe(repoRoot, winKeyword, $"长按 {keyArg} → {key} {ms}ms", () => InputService.HoldKey(key, ms));
+}
+
+void RunTurn(string repoRoot, string[] cmdArgs)
+{
+    if (cmdArgs.Length < 2) throw new ArgumentException("用法: turn <dx> [dy] [窗口关键字(默认 三角洲行动)]");
+    int dx = int.Parse(cmdArgs[1]);
+    int dy = 0;
+    int idx = 2;
+    if (cmdArgs.Length > 2 && int.TryParse(cmdArgs[2], out int parsedDy))
+    {
+        dy = parsedDy;
+        idx = 3;
+    }
+    string winKeyword = cmdArgs.Length > idx ? cmdArgs[idx] : "三角洲行动";
+    RunInputProbe(repoRoot, winKeyword, $"视角转动 ({dx}, {dy})", () => InputService.MoveRelative(dx, dy));
+}
+
+void RunInputProbe(string repoRoot, string winKeyword, string describe, Action action)
+{
+    IntPtr hwnd = CaptureService.FindWindowByTitle(winKeyword);
+    if (hwnd == IntPtr.Zero) throw new InvalidOperationException($"没找到标题含 “{winKeyword}” 的窗口");
+
+    Console.WriteLine($"动作: {describe}");
+    Console.WriteLine("第 1 步: 采集动作前帧（内存）...");
+    using var pre = CaptureService.CaptureWindowMat(winKeyword);
+
+    Console.WriteLine("第 2 步: 抢占键盘焦点...");
+    InputService.EnsureForeground(hwnd);
+    Thread.Sleep(300);
+
+    Console.WriteLine("第 3 步: 执行动作...");
+    action();
+    Thread.Sleep(500);
+
+    Console.WriteLine("第 4 步: 采集动作后帧并计算帧差...");
+    using var post = CaptureService.CaptureWindowMat(winKeyword);
+    double score = FrameDiff.Score(pre, post);
+    string verdict = score >= 3.0
+        ? "✅ 画面明显变化，动作疑似生效"
+        : score >= 0.8
+            ? "🟡 有轻微变化（可能动作幅度小/已到边界）"
+            : "❓ 几乎无变化（检查焦点、按键名、是否已站在墙边）";
+    Console.WriteLine($"帧差(0-255): {score:F2}  {verdict}");
+
+    if (score >= 3.0)
+    {
+        string evPath = Path.Combine(repoRoot, "screenshots", "captured", $"probe_{DateTime.Now:yyyyMMdd_HHmmss}.png");
+        var dir = Path.GetDirectoryName(evPath);
+        if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+        if (Cv2.ImWrite(evPath, post))
+            Console.WriteLine($"已保存证据帧: {evPath}");
+    }
+}
+
 void PrintUsage()
 {
     Console.WriteLine("""
@@ -211,6 +285,8 @@ void PrintUsage()
           annotate <元素名> [截图路径]       静态识别冒烟 → screenshots/annotated/
           capture  [标题关键字] [文件名]     截屏冒烟 → screenshots/captured/
           click <元素名> [窗口关键字]        真实点击（点前/点后自动截图，默认 3 秒倒计时）
+          hold <键名> <毫秒> [窗口关键字]     长按测试（帧差验证，如: hold move_forward 1500）
+          turn <dx> [dy] [窗口关键字]         视角转动测试（帧差验证，如: turn 800 0）
           windows                           列出可见窗口
         """);
 }

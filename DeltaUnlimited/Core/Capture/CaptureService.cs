@@ -171,12 +171,54 @@ public static class CaptureService
         }
     }
 
-    /// <summary>从屏幕 DC 拷一块矩形区域 → BGRA 像素 → Mat → PNG。</summary>
+    /// <summary>从屏幕 DC 拷一块矩形区域 → 保存为 PNG。</summary>
     private static CaptureOutcome CaptureRegion(IntPtr hdcScreen, int srcX, int srcY, int w, int h, string pngPath)
     {
-        if (w <= 0 || h <= 0) throw new InvalidOperationException("截图区域尺寸无效");
         var dir = Path.GetDirectoryName(pngPath);
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+
+        using var mat = CapturePixels(hdcScreen, srcX, srcY, w, h);
+        if (!Cv2.ImWrite(pngPath, mat))
+            throw new IOException($"保存截图失败: {pngPath}");
+        Scalar mean = Cv2.Mean(mat);
+        return new CaptureOutcome(pngPath, srcX, srcY, w, h, mean[0], mean[1], mean[2]);
+    }
+
+    /// <summary>截指定窗口客户区，返回内存中的 BGRA Mat（调用方负责 Dispose）——不落盘，供帧差/识别用。</summary>
+    public static Mat CaptureWindowMat(string titleKeyword)
+    {
+        EnsureDpiAwareness();
+        IntPtr hwnd = FindWindowByTitle(titleKeyword);
+        if (hwnd == IntPtr.Zero)
+            throw new InvalidOperationException($"没找到标题含 “{titleKeyword}” 的窗口");
+
+        var client = GetClientScreenRect(hwnd)
+            ?? throw new InvalidOperationException("窗口无效或最小化，请还原窗口后重试");
+
+        RaiseWindow(hwnd);
+        System.Threading.Thread.Sleep(300);
+        try
+        {
+            IntPtr hdc = GetDC(IntPtr.Zero);
+            try
+            {
+                return CapturePixels(hdc, client.X, client.Y, client.W, client.H);
+            }
+            finally
+            {
+                _ = ReleaseDC(IntPtr.Zero, hdc);
+            }
+        }
+        finally
+        {
+            UnraiseWindow(hwnd);
+        }
+    }
+
+    /// <summary>从屏幕 DC 拷一块矩形区域 → 独立内存的 BGRA Mat（深拷贝，调用方负责 Dispose）。</summary>
+    private static Mat CapturePixels(IntPtr hdcScreen, int srcX, int srcY, int w, int h)
+    {
+        if (w <= 0 || h <= 0) throw new InvalidOperationException("截图区域尺寸无效");
 
         IntPtr memDc = CreateCompatibleDC(hdcScreen);
         if (memDc == IntPtr.Zero) throw new Win32Exception(Marshal.GetLastWin32Error(), "CreateCompatibleDC 失败");
@@ -204,18 +246,15 @@ public static class CaptureService
                 bool ok = BitBlt(memDc, 0, 0, w, h, hdcScreen, srcX, srcY, SRCCOPY | CAPTUREBLT);
                 if (!ok) throw new Win32Exception(Marshal.GetLastWin32Error(), "BitBlt 失败");
 
-                // DIB 像素 → Mat(CV_8UC4, BGRA) → 存 PNG
+                // DIB 像素 → Mat(CV_8UC4, BGRA)，Clone 深拷贝后即可释放 GCHandle
                 // 关键：必须在 DeleteObject(hBitmap) 之前拷贝，否则 bits 指向的内存已被释放
                 byte[] buf = new byte[w * h * 4];
                 Marshal.Copy(bits, buf, 0, buf.Length);
                 var handle = GCHandle.Alloc(buf, GCHandleType.Pinned);
                 try
                 {
-                    using var mat = Mat.FromPixelData(h, w, MatType.CV_8UC4, handle.AddrOfPinnedObject(), 0);
-                    if (!Cv2.ImWrite(pngPath, mat))
-                        throw new IOException($"保存截图失败: {pngPath}");
-                    Scalar mean = Cv2.Mean(mat);
-                    return new CaptureOutcome(pngPath, srcX, srcY, w, h, mean[0], mean[1], mean[2]);
+                    using var view = Mat.FromPixelData(h, w, MatType.CV_8UC4, handle.AddrOfPinnedObject(), 0);
+                    return view.Clone();
                 }
                 finally
                 {
