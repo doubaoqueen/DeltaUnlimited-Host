@@ -14,11 +14,4 @@
     <PackageReference Include="Vanara.PInvoke.User32" Version="5.0.7" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Core\Navigator\" />
-    <Folder Include="Core\Helmsman\" />
-    <Folder Include="Core\Lookout\" />
-    <Folder Include="Core\Shipwright\" />
-  </ItemGroup>
-
 </Project>

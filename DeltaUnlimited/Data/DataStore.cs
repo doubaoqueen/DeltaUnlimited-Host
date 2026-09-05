@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 
 namespace DeltaUnlimited.Data;
 
@@ -28,7 +28,7 @@ public sealed class DataStore
         throw new DirectoryNotFoundException("找不到 data/elements.json，请从项目根目录运行");
     }
 
-    private T LoadJson<T>(string relativePath)
+    public T LoadJson<T>(string relativePath)
     {
         var path = Path.Combine(_root, relativePath);
         var json = File.ReadAllText(path);
@@ -41,4 +41,7 @@ public sealed class DataStore
     public ItemValuesTable LoadItemValues() => LoadJson<ItemValuesTable>("data/item_values.json");
     public ZeroDamPoints LoadZeroDamPoints() => LoadJson<ZeroDamPoints>("data/zero_dam_points.json");
     public Workflow LoadWorkflow(string file) => LoadJson<Workflow>($"workflows/{file}");
+    public RuntimeConfig LoadRuntime() => LoadJson<RuntimeConfig>("data/runtime.json");
+    public Chain LoadChain(string file) => LoadJson<Chain>($"workflows/{file}");
+    public ScreenTable LoadScreens() => LoadJson<ScreenTable>("data/screens.json");
 }

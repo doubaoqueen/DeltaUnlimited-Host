@@ -1,6 +1,7 @@
 using DeltaUnlimited.Capture;
 using DeltaUnlimited.Data;
 using DeltaUnlimited.Input;
+using DeltaUnlimited.Overlay;
 using DeltaUnlimited.Vision;
 using OpenCvSharp;
 
@@ -51,6 +52,18 @@ try
             RunPatrol(store, root, args);
             break;
 
+        case "chain":
+            RunChain(store, root, args);
+            break;
+
+        case "crop":
+            RunCrop(root, args);
+            break;
+
+        case "overlay":
+            RunOverlay(store, root);
+            break;
+
         case "windows":
             RunListWindows();
             break;
@@ -80,13 +93,15 @@ void RunClick(DataStore data, string repoRoot, string[] cmdArgs)
     if (def.Strategy != "coord" || def.Params.X is null || def.Params.Y is null)
         throw new InvalidDataException($"元素 {elementName} 需要 coord 策略且 x/y 已填写才能点击");
 
+    var runtime = data.LoadRuntime();
+
     IntPtr hwnd = CaptureService.FindWindowByTitle(winKeyword);
     if (hwnd == IntPtr.Zero) throw new InvalidOperationException($"没找到标题含 “{winKeyword}” 的窗口");
 
     var r1 = CaptureService.GetClientScreenRect(hwnd)
         ?? throw new InvalidOperationException("窗口不可用（最小化？）");
-    int absX = r1.X + def.Params.X.Value;
-    int absY = r1.Y + def.Params.Y.Value;
+    int absX = (int)Math.Round(r1.X + def.Params.X.Value * (r1.W / (double)runtime.DesignWidth));
+    int absY = (int)Math.Round(r1.Y + def.Params.Y.Value * (r1.H / (double)runtime.DesignHeight));
     Console.WriteLine($"计划点击: 元素 “{elementName}” 画面内 ({def.Params.X}, {def.Params.Y}) → 屏幕 ({absX}, {absY})");
 
     // 第 1 步：点击前截图（确认现场，人工可查）
@@ -107,8 +122,8 @@ void RunClick(DataStore data, string repoRoot, string[] cmdArgs)
         CaptureService.UnraiseWindow(hwnd);
         throw new InvalidOperationException("点击前窗口不可用（最小化？）");
     }
-    absX = r2.Value.X + def.Params.X.Value;
-    absY = r2.Value.Y + def.Params.Y.Value;
+    absX = (int)Math.Round(r2.Value.X + def.Params.X.Value * (r2.Value.W / (double)runtime.DesignWidth));
+    absY = (int)Math.Round(r2.Value.Y + def.Params.Y.Value * (r2.Value.H / (double)runtime.DesignHeight));
     Console.WriteLine($"第 3 步: 点击 屏幕({absX}, {absY})...");
     InputService.ClickAt(absX, absY);
     CaptureService.UnraiseWindow(hwnd);
@@ -130,6 +145,9 @@ void RunSmoke(DataStore data)
     Console.WriteLine($"[elements.json] 元素识别表: {elements.Elements.Count} 个");
     foreach (var (name, def) in elements.Elements)
         Console.WriteLine($"  - {name}: strategy={def.Strategy}");
+
+    var runtime = data.LoadRuntime();
+    Console.WriteLine($"[runtime.json] 90°px={runtime.PxPer90Deg} 窗口关键字={runtime.WindowKeyword}");
 
     var ops = data.LoadGameOps();
     Console.WriteLine($"[game_ops.json] 按键 {ops.KeyMap.Count} 个, 复合动作 {ops.Actions.Count} 个");
@@ -212,12 +230,13 @@ void RunCapture(string repoRoot, string[] cmdArgs)
 void RunDrill(DataStore data, string repoRoot, string[] cmdArgs)
 {
     int rounds = cmdArgs.Length > 1 && int.TryParse(cmdArgs[1], out int rv) && rv > 0 ? rv : 2;
-    string winKeyword = cmdArgs.Length > 2 ? cmdArgs[2] : "三角洲行动";
+    var runtime = data.LoadRuntime();
+    string winKeyword = cmdArgs.Length > 2 ? cmdArgs[2] : runtime.WindowKeyword;
 
     const int fwdMs = 1600;      // 每段冲刺前进时长
-    const int turnPx = 800;      // 每次右转像素量（约 90°，取决于游戏内灵敏度）
     const double minScore = 3.0; // 帧差阈值：低于此值视为"没动"
     const int settleMs = 450;    // 动作结束后的稳定等待
+    int turnPx = (int)Math.Round(runtime.PxPer90Deg); // 右转 90° 的像素量（runtime.json 标定，与 EDPI 相关）
 
     var ops = data.LoadGameOps();
     string Resolve(string semantic) => ops.KeyMap.GetValueOrDefault(semantic, semantic);
@@ -308,11 +327,12 @@ bool MotionVerified(IntPtr hwnd, string winKeyword, string repoRoot, string desc
 
 void RunPatrol(DataStore data, string repoRoot, string[] cmdArgs)
 {
+    var runtime = data.LoadRuntime();
     double maxSeconds = cmdArgs.Length > 1 && double.TryParse(cmdArgs[1], out double ms1) ? ms1 : 60;
     double stuckThreshold = cmdArgs.Length > 2 && double.TryParse(cmdArgs[2], out double st) ? st : 4.0;
     int needLow = cmdArgs.Length > 3 && int.TryParse(cmdArgs[3], out int nl) ? nl : 3;
-    int turnPx = cmdArgs.Length > 4 && int.TryParse(cmdArgs[4], out int tp) ? tp : 800;
-    string winKeyword = cmdArgs.Length > 5 ? cmdArgs[5] : "三角洲行动";
+    int turnPx = cmdArgs.Length > 4 && int.TryParse(cmdArgs[4], out int tp) ? tp : (int)Math.Round(runtime.PxPer90Deg);
+    string winKeyword = cmdArgs.Length > 5 ? cmdArgs[5] : runtime.WindowKeyword;
 
     const double sampleEveryMs = 350;
     const double highScore = 8.0;     // ≥ 此值 = 明确的高速前进（开阔地冲刺实测 ~27）
@@ -335,7 +355,7 @@ void RunPatrol(DataStore data, string repoRoot, string[] cmdArgs)
         Environment.Exit(130);
     };
 
-    Console.WriteLine($"反应式巡逻 v2：最长 {maxSeconds}s | 守卫1 贴墙: 连续 {needLow} 次差 < {stuckThreshold} | 守卫2 横移: {slowDriftSec}s 无 ≥{highScore} 样本 | 转向 {turnPx}px");
+    Console.WriteLine($"反应式巡逻 v2：最长 {maxSeconds}s | 守卫1 贴墙: 连续 {needLow} 次差 < {stuckThreshold} | 守卫2 横移: {slowDriftSec}s 无 ≥{highScore} 样本 | 转向 {turnPx}px(标定)");
     Console.WriteLine("开始后角色将持续冲刺前进；受阻自动转向。Ctrl+C 急停。");
     Console.WriteLine("2 秒后开始，请盯紧屏幕！");
     Thread.Sleep(2000);
@@ -350,6 +370,7 @@ void RunPatrol(DataStore data, string repoRoot, string[] cmdArgs)
         stuckEvents++;
         int total = stuckEvents + driftEvents;
         Console.WriteLine($"  ⚠️ [t={t:F1}s] {reason}（贴墙#{stuckEvents} / 横移#{driftEvents}）→ 松开前进键");
+        StatusLog.Append(repoRoot, $"⚠️ {reason}（贴墙#{stuckEvents}/横移#{driftEvents}）→ 右转");
         InputService.ReleaseAllHeldKeys();
         Thread.Sleep(400);
         Console.WriteLine("  ↻ 右转中...");
@@ -370,6 +391,7 @@ void RunPatrol(DataStore data, string repoRoot, string[] cmdArgs)
         InputService.EnsureForeground(hwnd);
         InputService.PressKeys(new[] { fwdKey, sprintKey });
         Console.WriteLine("▶ 开始冲刺前进...");
+        StatusLog.Append(repoRoot, "▶ 巡逻开始：持续冲刺前进，受阻自动转向");
 
         while ((DateTime.Now - start).TotalSeconds < maxSeconds)
         {
@@ -392,7 +414,10 @@ void RunPatrol(DataStore data, string repoRoot, string[] cmdArgs)
                     lowRun = 0;
                     if (d >= highScore) lastHighAt = t;
                     if (samples % 8 == 0)
+                    {
                         Console.WriteLine($"  [t={t:F1}s] 运动差 {d:F2}（移动中·心跳）");
+                        StatusLog.Append(repoRoot, $"巡逻 t={t:F1}s 运动差 {d:F2}");
+                    }
                 }
 
                 if (lowRun >= needLow)
@@ -412,10 +437,275 @@ void RunPatrol(DataStore data, string repoRoot, string[] cmdArgs)
 
     double avg = samples > 0 ? diffSum / samples : 0;
     Console.WriteLine($"\n🏁 巡逻结束：运行 {(DateTime.Now - start):hh\\:mm\\:ss} | 采样 {samples} 次 | 平均运动差 {avg:F2} | 贴墙事件 {stuckEvents} | 横移/低效事件 {driftEvents}");
+    StatusLog.Append(repoRoot, $"🏁 巡逻结束：采样 {samples} 平均差 {avg:F2} 贴墙 {stuckEvents} 横移 {driftEvents}");
     Console.WriteLine("转角标定（与 EDPI=DPI×游戏灵敏度 相关，换设置需重标）:");
     Console.WriteLine("  面朝固定参照物 → 重复执行 turn 1000 0 直到回到原方向，记次数 n（转一圈约需 n 次）");
-    Console.WriteLine($"  → 90° 的 px ≈ 250×n，之后用: patrol 60 4 3 <该px> 传入");
+    Console.WriteLine($"  → 90° 的 px ≈ 250×n，当前标定值 {runtime.PxPer90Deg} 已存 data/runtime.json（EDPI 变化时更新它，或用第 4 参临时覆盖）");
     Console.WriteLine("校准提示: 贴墙不识别→阈值调大; 开阔地假贴墙→调小/加严: patrol 60 2.5 4");
+}
+
+// ===== 链路执行 chain：按 JSON 步骤顺序执行（半自动默认带人工确认点，--auto 全自动） =====
+
+void RunChain(DataStore data, string repoRoot, string[] cmdArgs)
+{
+    if (cmdArgs.Length < 2) throw new ArgumentException("用法: chain <workflow文件> [--auto]");
+    string chainFile = cmdArgs[1];
+    bool auto = cmdArgs.Any(a => a.Equals("--auto", StringComparison.OrdinalIgnoreCase));
+
+    var chain = data.LoadChain(chainFile);
+    var runtime = data.LoadRuntime();
+    var elements = data.LoadElements();
+    var screens = data.LoadScreens();
+    string winKeyword = runtime.WindowKeyword;
+
+    IntPtr hwnd = CaptureService.FindWindowByTitle(winKeyword);
+    if (hwnd == IntPtr.Zero) throw new InvalidOperationException($"没找到标题含 “{winKeyword}” 的窗口");
+
+    Console.CancelKeyPress += (_, e) =>
+    {
+        e.Cancel = true;
+        InputService.ReleaseAllHeldKeys();
+        Console.WriteLine("\n⛔ 手动急停，已释放所有按键");
+        Environment.Exit(130);
+    };
+
+    Console.WriteLine($"执行链路: {chain.Name}（{chain.Steps.Count} 步） 模式: {(auto ? "全自动" : "半自动（pause 步骤回车继续）")}");
+    Console.WriteLine("Ctrl+C 随时急停。");
+
+    int FindStep(string id)
+    {
+        int idx = chain.Steps.FindIndex(x => x.Id == id);
+        if (idx < 0) throw new InvalidDataException($"链路中不存在步骤 id: “{id}”");
+        return idx;
+    }
+
+    int i = 0;
+    while (i < chain.Steps.Count)
+    {
+        var s = chain.Steps[i];
+        Console.WriteLine($"\n[步骤 {i + 1}/{chain.Steps.Count}] {s.Op}");
+        StatusLog.Append(repoRoot, $"链路 {chainFile} 步骤 {i + 1}/{chain.Steps.Count} {s.Op}");
+        switch (s.Op)
+        {
+            case "key":
+                InputService.EnsureForeground(hwnd);
+                InputService.PressKey(s.Key ?? throw new InvalidDataException("key 步骤缺少 key 字段"));
+                StatusLog.Append(repoRoot, $"按键 {s.Key}");
+                break;
+
+            case "click_element":
+                ClickElementStep(hwnd, elements, s.Element ?? throw new InvalidDataException("click_element 步骤缺少 element 字段"), runtime.DesignWidth, runtime.DesignHeight);
+                StatusLog.Append(repoRoot, $"点击元素 {s.Element}");
+                break;
+
+            case "wait":
+                break; // 统一在步骤末尾按 wait_ms 等待
+
+            case "detect":
+            {
+                using var frame = CaptureService.CaptureWindowMat(winKeyword);
+                using var norm = FrameTools.Normalize(frame, runtime.DesignWidth, runtime.DesignHeight);
+                var scan = ScreenDetector.Scan(norm, screens, repoRoot);
+                var hit = scan.FirstOrDefault(c => c.Matched);
+                string msg;
+                if (hit is not null)
+                {
+                    var actions = screens.Screens[hit.Name].Actions;
+                    msg = $"识别界面: {hit.Name}（置信度 {hit.Confidence:F3}）可用操作: {string.Join(" / ", actions)}";
+                }
+                else
+                {
+                    var top = string.Join("  ", scan.Take(3).Select(c => $"{c.Name}={c.Confidence:F2}"));
+                    msg = $"识别界面: 未知（最接近: {top}）";
+                }
+                Console.WriteLine($"  👁 {msg}");
+                StatusLog.Append(repoRoot, msg);
+                break;
+            }
+
+            case "if_screen":
+            {
+                string want = s.Screen ?? throw new InvalidDataException("if_screen 步骤缺少 screen 字段");
+                using var frame = CaptureService.CaptureWindowMat(winKeyword);
+                using var norm = FrameTools.Normalize(frame, runtime.DesignWidth, runtime.DesignHeight);
+                var guess = ScreenDetector.Detect(norm, screens, repoRoot);
+                string got = guess?.Name ?? "unknown";
+                Console.WriteLine($"  👁 界面判断: 当前 {got} / 期望 {want} → {(got == want ? "命中 ✅" : "未命中 ❌")}");
+                StatusLog.Append(repoRoot, $"界面判断: 当前 {got} / 期望 {want} {(got == want ? "命中" : "未命中")}");
+                if (got == want && !string.IsNullOrEmpty(s.JumpTo))
+                {
+                    Console.WriteLine($"  ↪ 跳转到 “{s.JumpTo}”");
+                    i = FindStep(s.JumpTo);
+                    continue;
+                }
+                break;
+            }
+
+            case "pause":
+                if (!auto)
+                {
+                    Console.WriteLine($"  ⏸ {s.Message ?? "人工确认点"} —— 按回车继续（Ctrl+C 中止）");
+                    Console.ReadLine();
+                }
+                break;
+
+            case "if_template":
+            {
+                string tpl = s.Template ?? throw new InvalidDataException("if_template 步骤缺少 template 字段");
+                string tplPath = Path.Combine(repoRoot, tpl);
+                using var frame = CaptureService.CaptureWindowMat(winKeyword);
+                using var norm = FrameTools.Normalize(frame, runtime.DesignWidth, runtime.DesignHeight);
+                var mr = TemplateMatcher.Match(norm, tplPath, s.Threshold ?? 0.85);
+                Console.WriteLine($"  模板检测: {tpl} 置信度 {mr.Confidence:F3} → {(mr.Found ? "命中 ✅" : "未命中 ❌")}");
+                StatusLog.Append(repoRoot, $"模板检测 {tpl}: {mr.Confidence:F3} {(mr.Found ? "命中" : "未命中")}");
+                if (mr.Found && !string.IsNullOrEmpty(s.JumpTo))
+                {
+                    Console.WriteLine($"  ↪ 跳转到 “{s.JumpTo}”");
+                    i = FindStep(s.JumpTo);
+                    continue;
+                }
+                break;
+            }
+
+            case "jump":
+            {
+                string to = s.JumpTo ?? throw new InvalidDataException("jump 步骤缺少 jump_to 字段");
+                Console.WriteLine($"  ↪ 无条件跳转到 “{to}”");
+                i = FindStep(to);
+                continue;
+            }
+
+            default:
+                throw new InvalidDataException($"未知步骤 op: {s.Op}");
+        }
+
+        if (s.WaitMs is int w && w > 0) Thread.Sleep(w);
+        if (!string.IsNullOrEmpty(s.Capture))
+        {
+            string p = Path.Combine(repoRoot, "screenshots", "captured", $"chain_{i + 1}_{s.Capture}_{DateTime.Now:HHmmss}.png");
+            Console.WriteLine(CaptureService.CaptureWindowClient(winKeyword, p));
+        }
+        i++;
+    }
+    Console.WriteLine($"\n🎉 链路 {chain.Name} 执行完成");
+}
+
+/// <summary>点击一个 coord 策略元素：窗口置顶 → 设计分辨率坐标缩放 → 实时换算 → 拟人化点击。</summary>
+void ClickElementStep(IntPtr hwnd, ElementsTable table, string elementName, int designW, int designH)
+{
+    if (!table.Elements.TryGetValue(elementName, out var def))
+        throw new ArgumentException($"元素表里没有 “{elementName}”");
+    if (def.Strategy != "coord" || def.Params.X is null || def.Params.Y is null)
+        throw new InvalidDataException($"元素 {elementName} 需要 coord 策略且 x/y 已填写");
+
+    CaptureService.RaiseWindow(hwnd);
+    Thread.Sleep(250);
+    InputService.EnsureForeground(hwnd); // 部分游戏非前台时忽略鼠标点击
+    Thread.Sleep(200);
+    var r = CaptureService.GetClientScreenRect(hwnd);
+    if (r is null)
+    {
+        CaptureService.UnraiseWindow(hwnd);
+        throw new InvalidOperationException("点击前窗口不可用（最小化？）");
+    }
+    int absX = (int)Math.Round(r.Value.X + def.Params.X.Value * (r.Value.W / (double)designW));
+    int absY = (int)Math.Round(r.Value.Y + def.Params.Y.Value * (r.Value.H / (double)designH));
+    InputService.ClickAt(absX, absY);
+    CaptureService.UnraiseWindow(hwnd);
+}
+
+// ===== 素材裁剪 crop：从截图裁模板小图（模板匹配素材制作工具） =====
+
+void RunCrop(string repoRoot, string[] cmdArgs)
+{
+    if (cmdArgs.Length < 6) throw new ArgumentException("用法: crop <x> <y> <w> <h> <源图相对路径> [输出相对路径] [缩放系数]");
+    int x = int.Parse(cmdArgs[1]);
+    int y = int.Parse(cmdArgs[2]);
+    int w = int.Parse(cmdArgs[3]);
+    int h = int.Parse(cmdArgs[4]);
+    string srcRel = cmdArgs[5];
+    string outRel = cmdArgs.Length > 6 ? cmdArgs[6] : "screenshots/cropped.png";
+    double scale = cmdArgs.Length > 7 && double.TryParse(cmdArgs[7], out double sc) && sc > 0 ? sc : 1.0;
+
+    using var img = Cv2.ImRead(Path.Combine(repoRoot, srcRel), ImreadModes.Color);
+    if (img.Empty()) throw new FileNotFoundException($"图片读取失败: {srcRel}");
+    using var cropped = new Mat(img, new Rect(x, y, w, h));
+
+    Mat saveMat = cropped;
+    Mat? resized = null;
+    if (Math.Abs(scale - 1.0) > 0.001)
+    {
+        resized = new Mat();
+        Cv2.Resize(cropped, resized, new Size((int)Math.Round(w * scale), (int)Math.Round(h * scale)), 0, 0, InterpolationFlags.Linear);
+        saveMat = resized;
+    }
+
+    string outAbs = Path.Combine(repoRoot, outRel);
+    var d = Path.GetDirectoryName(outAbs);
+    if (!string.IsNullOrEmpty(d)) Directory.CreateDirectory(d);
+    try
+    {
+        if (!Cv2.ImWrite(outAbs, saveMat)) throw new IOException($"保存失败: {outAbs}");
+        Console.WriteLine($"✅ 裁剪完成: {outRel}（{saveMat.Width}x{saveMat.Height}，缩放 x{scale}）");
+    }
+    finally
+    {
+        resized?.Dispose();
+    }
+}
+
+// ===== 悬浮状态面板 overlay：常驻进程，把 logs/status.log 尾部渲染到游戏画面上 =====
+
+void RunOverlay(DataStore data, string repoRoot)
+{
+    var runtime = data.LoadRuntime();
+
+    Console.CancelKeyPress += (_, e) =>
+    {
+        e.Cancel = true;
+        StatusOverlay.Stop();
+        Environment.Exit(0);
+    };
+
+    Console.WriteLine($"等待游戏窗口（标题含 “{runtime.WindowKeyword}”）... 游戏没开时每 2 秒重试；Ctrl+C 退出");
+    (int X, int Y, int W, int H)? rect = null;
+    IntPtr gameHwnd = IntPtr.Zero;
+    while (rect is null)
+    {
+        gameHwnd = CaptureService.FindWindowByTitle(runtime.WindowKeyword);
+        rect = CaptureService.GetClientScreenRect(gameHwnd);
+        if (rect is null)
+        {
+            Console.WriteLine("  未找到游戏窗口，2 秒后重试...");
+            Thread.Sleep(2000);
+        }
+    }
+
+    Console.WriteLine($"✅ 悬浮面板启动于游戏客户区 ({rect.Value.X},{rect.Value.Y}) {rect.Value.W}x{rect.Value.H}（置顶+鼠标穿透，只覆盖游戏）");
+    Console.WriteLine("状态来源: logs/status.log —— 运行 chain/patrol/click 等命令会实时刷新。Ctrl+C 关闭。");
+    StatusOverlay.Start(rect.Value.X, rect.Value.Y, rect.Value.W, rect.Value.H);
+
+    string logPath = Path.Combine(repoRoot, "logs", "status.log");
+    while (true)
+    {
+        try
+        {
+            var tail = new List<string>();
+            if (File.Exists(logPath))
+            {
+                string[] all = File.ReadAllLines(logPath);
+                int start = Math.Max(0, all.Length - 12);
+                for (int i = start; i < all.Length; i++) tail.Add(all[i]);
+            }
+            if (tail.Count == 0) tail.Add("（暂无日志 —— 运行 chain/patrol 后这里会实时显示）");
+            StatusOverlay.SetStatus("DeltaUnlimited 状态", tail.ToArray());
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"  [overlay] 读取日志失败: {ex.Message}");
+        }
+        Thread.Sleep(500);
+    }
 }
 
 void RunListWindows()
@@ -508,6 +798,9 @@ void PrintUsage()
           turn <dx> [dy] [窗口关键字]         视角转动测试（帧差验证，如: turn 800 0）
           drill [圈数] [窗口关键字]           靶场自主行进循环（帧差确认+自动重试+急停）
           patrol [秒数] [阈值] [连续] [90°px] [窗口]   反应式巡逻 v2：贴墙停+横移低效双守卫，自动转向
+          chain <workflow文件> [--auto]        按 JSON 步骤执行链路（detect/if_screen 分支/jump）
+          crop <x> <y> <w> <h> <源图> [输出] [缩放]   从截图裁模板小图（可缩放换算设计分辨率）
+          overlay                           悬浮状态面板（游戏画面上实时显示识别/操作日志）
           windows                           列出可见窗口
         """);
 }

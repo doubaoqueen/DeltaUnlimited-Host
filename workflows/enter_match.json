@@ -1,0 +1,18 @@
+{
+  "name": "进场链路 v2（界面识别驱动分支）",
+  "说明": "Tab 后用界面识别(detect)判断当前状态：首次(plaza_first 有行前战备)→完整流程；常态(plaza_ready 配装|出发)→点出发。未识别则人工兜底。",
+  "steps": [
+    { "id": "start", "op": "key", "key": "tab", "wait_ms": 1500, "capture": "after_tab" },
+    { "id": "detect_after_tab", "op": "detect" },
+    { "id": "branch_first", "op": "if_screen", "screen": "plaza_first", "jump_to": "first_time" },
+    { "id": "branch_ready", "op": "if_screen", "screen": "plaza_ready", "jump_to": "normal_ready" },
+    { "op": "pause", "message": "未识别出已知界面（待补模板）——人工确认当前状态后回车" },
+    { "op": "jump", "jump_to": "end" },
+    { "id": "first_time", "op": "click_element", "element": "plaza_prep_button", "wait_ms": 2000, "capture": "map_select" },
+    { "op": "pause", "message": "首次配置分支：确认已到地图选择界面（后续步骤待标注）" },
+    { "op": "jump", "jump_to": "end" },
+    { "id": "normal_ready", "op": "click_element", "element": "depart_button", "wait_ms": 2000, "capture": "char_select" },
+    { "op": "pause", "message": "常态分支：已点“出发”。确认是否到选人界面（后续步骤待标注）" },
+    { "id": "end", "op": "pause", "message": "链路结束" }
+  ]
+}

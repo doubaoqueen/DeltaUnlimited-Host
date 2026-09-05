@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "说明": "界面识别表：markers 全部命中才判定为该界面（分数取最差命中置信度）；无标记的界面暂不可检测，待用 crop 裁模板后补充。",
+  "screens": {
+    "lobby": {
+      "note": "游戏大厅（按 Tab 前）",
+      "markers": [],
+      "actions": ["按 Tab 切到游戏广场"]
+    },
+    "plaza_first": {
+      "note": "游戏广场-本次启动首次进入（右下有“行前战备”）",
+      "markers": [
+        { "type": "template", "template": "assets/templates/plaza_prep_button.png", "threshold": 0.85 }
+      ],
+      "actions": ["点击 行前战备 → 地图选择"]
+    },
+    "plaza_ready": {
+      "note": "游戏广场-常态（右下“配装|出发”）",
+      "markers": [
+        { "type": "template", "template": "assets/templates/depart_button.png", "threshold": 0.85 }
+      ],
+      "actions": ["点击 出发 → 选人界面"]
+    },
+    "map_select": {
+      "note": "地图选择界面",
+      "markers": [],
+      "actions": ["选择 零号大坝", "点击 开始行动"]
+    },
+    "loadout": {
+      "note": "战前配装界面",
+      "markers": [],
+      "actions": ["确认配装（跑刀不选贵重物品）"]
+    },
+    "char_select": {
+      "note": "选人界面",
+      "markers": [],
+      "actions": ["待标注"]
+    }
+  }
+}

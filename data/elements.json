@@ -26,6 +26,11 @@
       "note": "行前备战按钮（game-plaza.png 右下角，四角换算中心点）",
       "strategy": "coord",
       "params": { "x": 1645, "y": 966 }
+    },
+    "depart_button": {
+      "note": "出发按钮（常态广场右下“配装|出发”右半，四角 1645,945→1830,987 换算中心）",
+      "strategy": "coord",
+      "params": { "x": 1738, "y": 966 }
     }
   }
 }

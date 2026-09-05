@@ -58,7 +58,7 @@ public static class ImageAnnotator
         Save(img, outPath);
         return new MatchResult(maxVal >= threshold, maxVal, cx, cy, w, h);
     }
-
+    // <summary>加载图片，确保文件存在且可解码。</summary>
     private static Mat LoadImage(string path)
     {
         if (!File.Exists(path))
@@ -68,14 +68,14 @@ public static class ImageAnnotator
             throw new InvalidDataException($"无法解码图片: {path}");
         return img;
     }
-
+    // <summary>在图片上画文字标签，自动收敛到图片内。</summary>
     private static void PutLabel(Mat img, string label, int x, int y)
     {
         // 文字画不下时收敛到图片内
         var org = new Point(Math.Clamp(x, 4, Math.Max(4, img.Width - 220)), Math.Clamp(y, 16, Math.Max(16, img.Height - 8)));
         Cv2.PutText(img, label, org, HersheyFonts.HersheySimplex, 0.6, Red, 2, LineTypes.AntiAlias);
     }
-
+    // <summary>保存图片，确保目录存在。</summary>
     private static void Save(Mat img, string outPath)
     {
         var dir = Path.GetDirectoryName(outPath);

@@ -34,15 +34,44 @@ public static class InputService
     private static readonly object HeldLock = new();
     private static readonly HashSet<ushort> HeldKeys = new();
 
-    /// <summary>把鼠标移动到屏幕坐标 (x, y) 并左键单击（移动为分段缓动）。</summary>
+    /// <summary>把鼠标移动到屏幕坐标 (x, y) 并左键单击。
+    /// 移动用分段缓动（拟人）；按下前用绝对坐标钉死落点（相对移动受指针加速影响会漂移）。</summary>
     public static void ClickAt(int screenX, int screenY)
     {
         MoveTo(screenX, screenY);
-        Thread.Sleep(Rng.Next(120, 280)); // 到达后的自然停顿
+        SendAbsolute(screenX, screenY); // 精确落点：不受“提高指针精确度”加速影响
+        GetCursorPos(out POINT cur);
+        Console.WriteLine($"[Input] 光标落点校验: ({cur.X}, {cur.Y})，目标 ({screenX}, {screenY})");
+        Thread.Sleep(Rng.Next(150, 320)); // 到达后的自然停顿
         SendMouse(MOUSEEVENTF_LEFTDOWN);
-        Thread.Sleep(Rng.Next(35, 90));   // 按下到抬起的自然间隔
+        Thread.Sleep(Rng.Next(100, 220)); // 按下到抬起的按压时长（游戏按钮需要足够时长才会响应）
         SendMouse(MOUSEEVENTF_LEFTUP);
         Console.WriteLine($"[Input] 左键单击 屏幕({screenX}, {screenY})");
+    }
+
+    /// <summary>绝对定位：SendInput 归一化坐标（0-65535），不受鼠标加速影响。</summary>
+    public static void MoveAbsoluteTo(int screenX, int screenY) => SendAbsolute(screenX, screenY);
+
+    private static void SendAbsolute(int screenX, int screenY)
+    {
+        int w = GetSystemMetrics(SM_CXSCREEN);
+        int h = GetSystemMetrics(SM_CYSCREEN);
+        uint nx = (uint)(screenX * 65535 / Math.Max(1, w - 1));
+        uint ny = (uint)(screenY * 65535 / Math.Max(1, h - 1));
+        var input = new INPUT
+        {
+            type = INPUT_MOUSE,
+            mi = new MOUSEINPUT
+            {
+                dx = (int)nx,
+                dy = (int)ny,
+                mouseData = 0,
+                dwFlags = MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE,
+                time = 0,
+                dwExtraInfo = IntPtr.Zero,
+            }
+        };
+        Send(ref input);
     }
 
     /// <summary>平滑移动鼠标到屏幕坐标（从当前位置按缓动曲线分步移动，精确落在目标点）。</summary>
@@ -73,15 +102,15 @@ public static class InputService
         double wsum = 0;
         for (int i = 1; i <= steps; i++)
         {
-            double t = (double)i / steps;
-            double s = Math.Sin(Math.PI * t);            // 0→1→0 缓动
+            double t = (double)i / steps;                   // 0→1
+            double s = Math.Sin(Math.PI * t);              // 0→1→0 缓动
             double jitter = 0.8 + Rng.NextDouble() * 0.4; // 0.8–1.2 抖动
-            weights[i - 1] = s * jitter;
-            wsum += weights[i - 1];
+            weights[i - 1] = s * jitter;                 // 0→1→0 缓动 + 抖动
+            wsum += weights[i - 1];                     // 归一化总和
         }
 
-        double accX = 0, accY = 0;
-        long lastX = 0, lastY = 0;
+        double accX = 0, accY = 0;  
+        long lastX = 0, lastY = 0;  
         for (int i = 0; i < steps; i++)
         {
             accX += dx * weights[i] / wsum;
@@ -213,6 +242,9 @@ public static class InputService
         };
         Send(ref input);
     }
+
+    /// <summary>指定窗口是否为当前前台窗口。</summary>
+    public static bool IsForeground(IntPtr hwnd) => hwnd != IntPtr.Zero && GetForegroundWindow() == hwnd;
 
     /// <summary>
     /// 确保窗口持有键盘焦点（FPS 需要焦点才能收到移动/鼠标输入）。

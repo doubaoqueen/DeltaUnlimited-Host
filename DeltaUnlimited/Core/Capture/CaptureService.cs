@@ -109,6 +109,9 @@ public static class CaptureService
         }
     }
 
+    /// <summary>窗口是否处于最小化状态（GetClientRect 对最小化窗口仍返回正常尺寸，必须用 IsIconic 判断）。</summary>
+    public static bool IsMinimized(IntPtr hwnd) => hwnd != IntPtr.Zero && IsIconic(hwnd);
+
     /// <summary>窗口在屏幕上的矩形 (X, Y, W, H)（含边框标题栏，调试用）。</summary>
     public static (int X, int Y, int W, int H)? GetWindowScreenRect(IntPtr hwnd)
     {
@@ -322,6 +325,10 @@ public static class CaptureService
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool IsWindowVisible(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsIconic(IntPtr hWnd);
 
     [DllImport("user32.dll", EntryPoint = "GetWindowTextW", CharSet = CharSet.Unicode)]
     private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
