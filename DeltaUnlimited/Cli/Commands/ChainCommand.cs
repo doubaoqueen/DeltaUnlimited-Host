@@ -4,10 +4,12 @@ using DeltaUnlimited.Data;
 using DeltaUnlimited.Input;
 using DeltaUnlimited.Overlay;
 using DeltaUnlimited.Vision;
+using OpenCvSharp;
 
 namespace DeltaUnlimited.Cli.Commands;
 
-/// <summary>chain：按 JSON 步骤顺序执行链路（半自动默认带人工确认点，--auto 全自动；支持 detect/if_screen/if_template 分支与 jump）。</summary>
+/// <summary>chain：按 JSON 步骤顺序执行链路（半自动默认带人工确认点，--auto 全自动；支持 detect/if_screen/if_template 分支与 jump）。
+/// click_element 支持 expect_screen/timeout_ms/retries：点击后轮询验证目标界面，失败自动重试，仍失败留证据并中止（#7）。</summary>
 public static class ChainCommand
 {
     public static void Run(DataStore data, string repoRoot, string[] cmdArgs)
@@ -42,19 +44,61 @@ public static class ChainCommand
         {
             var s = chain.Steps[i];
             Console.WriteLine($"\n[步骤 {i + 1}/{chain.Steps.Count}] {s.Op}");
-            StatusLog.Append(repoRoot, $"链路 {chainFile} 步骤 {i + 1}/{chain.Steps.Count} {s.Op}");
+            Logger.Info($"链路 {chainFile} 步骤 {i + 1}/{chain.Steps.Count} {s.Op}");
             switch (s.Op)
             {
                 case "key":
                     InputService.EnsureForeground(hwnd);
                     InputService.PressKey(s.Key ?? throw new InvalidDataException("key 步骤缺少 key 字段"));
-                    StatusLog.Append(repoRoot, $"按键 {s.Key}");
+                    Logger.Info($"按键 {s.Key}");
                     break;
 
                 case "click_element":
-                    ClickElementStep(hwnd, elements, s.Element ?? throw new InvalidDataException("click_element 步骤缺少 element 字段"), runtime.DesignWidth, runtime.DesignHeight);
-                    StatusLog.Append(repoRoot, $"点击元素 {s.Element}");
+                {
+                    string elName = s.Element ?? throw new InvalidDataException("click_element 步骤缺少 element 字段");
+                    int retries = s.Retries ?? 0;
+                    int timeoutMs = s.TimeoutMs ?? 8000;
+
+                    bool ok = false;
+                    for (int attempt = 0; attempt <= retries; attempt++)
+                    {
+                        ClickElementStep(hwnd, elements, elName, runtime.DesignWidth, runtime.DesignHeight);
+                        Logger.Info($"点击元素 {elName}（第 {attempt + 1}/{retries + 1} 次）");
+
+                        if (string.IsNullOrEmpty(s.ExpectScreen))
+                        {
+                            ok = true; // 未配置 expect_screen：按旧行为（点了即继续）
+                            break;
+                        }
+
+                        ok = WaitForScreen(runtime, screens, repoRoot, s.ExpectScreen, timeoutMs);
+                        if (ok)
+                        {
+                            Logger.Info($"✅ 已进入预期界面 {s.ExpectScreen}");
+                            break;
+                        }
+                        Logger.Warn($"点击 {elName} 后未进入 {s.ExpectScreen}（第 {attempt + 1} 次，超时 {timeoutMs}ms）");
+                        Thread.Sleep(800);
+                    }
+
+                    if (!ok)
+                    {
+                        try
+                        {
+                            string ev = Path.Combine(repoRoot, "screenshots", "captured", $"chain_fail_{DateTime.Now:yyyyMMdd_HHmmss}.png");
+                            var d = Path.GetDirectoryName(ev);
+                            if (!string.IsNullOrEmpty(d)) Directory.CreateDirectory(d);
+                            using var f = CaptureService.CaptureWindowMat(winKeyword);
+                            if (Cv2.ImWrite(ev, f)) Logger.Warn($"证据帧已保存: {ev}");
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.Warn($"证据保存失败: {ex.Message}");
+                        }
+                        throw new InvalidOperationException($"点击 {elName} 后 {retries + 1} 次均未进入预期界面 {s.ExpectScreen}，链路中止");
+                    }
                     break;
+                }
 
                 case "wait":
                     break; // 统一在步骤末尾按 wait_ms 等待
@@ -75,9 +119,12 @@ public static class ChainCommand
                     {
                         var top = string.Join("  ", scan.Take(3).Select(c => $"{c.Name}={c.Confidence:F2}"));
                         msg = $"识别界面: 未知（最接近: {top}）";
+                        var uncfg = ScreenDetector.UnconfiguredScreens(screens);
+                        if (uncfg.Count > 0)
+                            msg += $"；未配置标记的界面: {string.Join(", ", uncfg)}";
                     }
                     Console.WriteLine($"  👁 {msg}");
-                    StatusLog.Append(repoRoot, msg);
+                    Logger.Info(msg);
                     break;
                 }
 
@@ -89,7 +136,7 @@ public static class ChainCommand
                     var guess = ScreenDetector.Detect(norm, screens, repoRoot);
                     string got = guess?.Name ?? "unknown";
                     Console.WriteLine($"  👁 界面判断: 当前 {got} / 期望 {want} → {(got == want ? "命中 ✅" : "未命中 ❌")}");
-                    StatusLog.Append(repoRoot, $"界面判断: 当前 {got} / 期望 {want} {(got == want ? "命中" : "未命中")}");
+                    Logger.Info($"界面判断: 当前 {got} / 期望 {want} {(got == want ? "命中" : "未命中")}");
                     if (got == want && !string.IsNullOrEmpty(s.JumpTo))
                     {
                         Console.WriteLine($"  ↪ 跳转到 “{s.JumpTo}”");
@@ -115,7 +162,7 @@ public static class ChainCommand
                     using var norm = FrameTools.Normalize(frame, runtime.DesignWidth, runtime.DesignHeight);
                     var mr = TemplateMatcher.Match(norm, tplPath, s.Threshold ?? 0.85);
                     Console.WriteLine($"  模板检测: {tpl} 置信度 {mr.Confidence:F3} → {(mr.Found ? "命中 ✅" : "未命中 ❌")}");
-                    StatusLog.Append(repoRoot, $"模板检测 {tpl}: {mr.Confidence:F3} {(mr.Found ? "命中" : "未命中")}");
+                    Logger.Info($"模板检测 {tpl}: {mr.Confidence:F3} {(mr.Found ? "命中" : "未命中")}");
                     if (mr.Found && !string.IsNullOrEmpty(s.JumpTo))
                     {
                         Console.WriteLine($"  ↪ 跳转到 “{s.JumpTo}”");
@@ -146,6 +193,21 @@ public static class ChainCommand
             i++;
         }
         Console.WriteLine($"\n🎉 链路 {chain.Name} 执行完成");
+    }
+
+    /// <summary>轮询等待目标界面出现（expect_screen 用），超时返回 false。</summary>
+    private static bool WaitForScreen(RuntimeConfig runtime, ScreenTable screens, string repoRoot, string want, int timeoutMs)
+    {
+        var deadline = DateTime.Now.AddMilliseconds(timeoutMs);
+        while (DateTime.Now < deadline)
+        {
+            Thread.Sleep(800);
+            using var frame = CaptureService.CaptureWindowMat(runtime.WindowKeyword, raiseAndWait: false);
+            using var norm = FrameTools.Normalize(frame, runtime.DesignWidth, runtime.DesignHeight);
+            var guess = ScreenDetector.Detect(norm, screens, repoRoot);
+            if (guess?.Name == want) return true;
+        }
+        return false;
     }
 
     /// <summary>点击一个 coord 策略元素：窗口置顶 → 抢焦点 → 设计分辨率坐标缩放 → 拟人化点击。</summary>

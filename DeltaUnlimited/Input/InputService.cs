@@ -1,16 +1,15 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
+using DeltaUnlimited.Data;
 
 namespace DeltaUnlimited.Input;
 
 /// <summary>
 /// 键鼠输出（Helmsman）：SendInput 模拟真实输入。
 /// 绝对移动（定位点击）用屏幕坐标；相对移动（视角转动）用增量。
+/// 支持组合键（"ctrl+left" 等 "+" 分隔串）与鼠标键 token（left/right/middle）。
 ///
-/// 拟人化 v1（内置于所有动作，调用方无需关心）：
-///   - 鼠标移动：正弦缓动分段 + 每步随机抖动/间隔，不再瞬移（贝塞尔曲线留待 M2 升级）；
-///   - 点击：到达后随机停顿、按下与抬起之间随机间隔；
-///   - 按键：按下持续时间加入随机抖动。
+/// 拟人化参数全部来自 HumanizerConfig（runtime.json 的 humanizer 段），调参不改代码。
 /// 说明：拟人化降低"机械感"，不等于免疫风控；实战频率与行为仍需自行控制（见大纲 §7）。
 /// </summary>
 public static class InputService
@@ -21,6 +20,10 @@ public static class InputService
     private const uint MOUSEEVENTF_MOVE = 0x0001;
     private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
     private const uint MOUSEEVENTF_LEFTUP = 0x0004;
+    private const uint MOUSEEVENTF_RIGHTDOWN = 0x0008;
+    private const uint MOUSEEVENTF_RIGHTUP = 0x0010;
+    private const uint MOUSEEVENTF_MIDDLEDOWN = 0x0020;
+    private const uint MOUSEEVENTF_MIDDLEUP = 0x0040;
     private const uint MOUSEEVENTF_ABSOLUTE = 0x8000;
 
     private const uint KEYEVENTF_KEYUP = 0x0002;
@@ -33,6 +36,14 @@ public static class InputService
     private static readonly Random Rng = new();
     private static readonly object HeldLock = new();
     private static readonly HashSet<ushort> HeldKeys = new();
+    private static readonly HashSet<uint> HeldMouseButtons = new();
+
+    private static HumanizerConfig Config = new();
+
+    /// <summary>注入拟人化参数（启动时从 runtime.json 读取后调用）。</summary>
+    public static void Configure(HumanizerConfig config) => Config = config ?? new HumanizerConfig();
+
+    private static int Rand(int min, int max) => Rng.Next(min, max + 1);
 
     /// <summary>把鼠标移动到屏幕坐标 (x, y) 并左键单击。
     /// 移动用分段缓动（拟人）；按下前用绝对坐标钉死落点（相对移动受指针加速影响会漂移）。</summary>
@@ -42,9 +53,9 @@ public static class InputService
         SendAbsolute(screenX, screenY); // 精确落点：不受“提高指针精确度”加速影响
         GetCursorPos(out POINT cur);
         Console.WriteLine($"[Input] 光标落点校验: ({cur.X}, {cur.Y})，目标 ({screenX}, {screenY})");
-        Thread.Sleep(Rng.Next(150, 320)); // 到达后的自然停顿
+        Thread.Sleep(Rand(Config.ClickPauseMin, Config.ClickPauseMax)); // 到达后的自然停顿
         SendMouse(MOUSEEVENTF_LEFTDOWN);
-        Thread.Sleep(Rng.Next(100, 220)); // 按下到抬起的按压时长（游戏按钮需要足够时长才会响应）
+        Thread.Sleep(Rand(Config.PressHoldMin, Config.PressHoldMax)); // 按下到抬起的按压时长
         SendMouse(MOUSEEVENTF_LEFTUP);
         Console.WriteLine($"[Input] 左键单击 屏幕({screenX}, {screenY})");
     }
@@ -78,9 +89,7 @@ public static class InputService
     public static void MoveTo(int screenX, int screenY)
     {
         GetCursorPos(out POINT cur);
-        int dx = screenX - cur.X;
-        int dy = screenY - cur.Y;
-        MoveRelative(dx, dy);
+        MoveRelative(screenX - cur.X, screenY - cur.Y);
     }
 
     /// <summary>相对移动鼠标（dx/dy 像素增量）——视角转动用。自动分段缓动 + 抖动。</summary>
@@ -95,22 +104,22 @@ public static class InputService
         }
 
         // 分段数：距离越大步数越多，加随机扰动避免机械规律
-        int steps = Math.Clamp(dist / 70 + Rng.Next(3, 8), 4, 28);
+        int steps = Math.Clamp(dist / 70 + Rand(Config.StepExtraMin, Config.StepExtraMax), 4, 28);
 
         // 正弦缓动权重（起步慢→中途快→收尾慢）× 随机抖动，重归一化保证总和精确等于 (dx, dy)
         var weights = new double[steps];
         double wsum = 0;
         for (int i = 1; i <= steps; i++)
         {
-            double t = (double)i / steps;                   // 0→1
-            double s = Math.Sin(Math.PI * t);              // 0→1→0 缓动
-            double jitter = 0.8 + Rng.NextDouble() * 0.4; // 0.8–1.2 抖动
-            weights[i - 1] = s * jitter;                 // 0→1→0 缓动 + 抖动
-            wsum += weights[i - 1];                     // 归一化总和
+            double t = (double)i / steps;
+            double s = Math.Sin(Math.PI * t);
+            double jitter = Config.StepJitterMin + Rng.NextDouble() * (Config.StepJitterMax - Config.StepJitterMin);
+            weights[i - 1] = s * jitter;
+            wsum += weights[i - 1];
         }
 
-        double accX = 0, accY = 0;  
-        long lastX = 0, lastY = 0;  
+        double accX = 0, accY = 0;
+        long lastX = 0, lastY = 0;
         for (int i = 0; i < steps; i++)
         {
             accX += dx * weights[i] / wsum;
@@ -123,50 +132,58 @@ public static class InputService
             lastY = iy;
             if (sx == 0 && sy == 0) continue;
             SendRelative(sx, sy);
-            Thread.Sleep(Rng.Next(3, 11)); // 每步随机间隔，模拟手部抖动轨迹
+            Thread.Sleep(Rand(Config.MouseStepDelayMin, Config.MouseStepDelayMax)); // 每步随机间隔
         }
 
         Console.WriteLine($"[Input] 鼠标相对移动 ({dx}, {dy})，{steps} 步缓动完成");
     }
 
-    /// <summary>按下并松开一个键（短按，按下时长随机）。</summary>
+    /// <summary>按下并松开一个键（短按，按下时长随机）。支持 "a+b" 组合串与鼠标键 token。</summary>
     public static void PressKey(string key)
     {
-        ushort vk = MapKeyName(key);
-        if (vk == 0) throw new ArgumentException($"不认识的按键名: {key}");
-        KeyDown(vk);
-        Thread.Sleep(Rng.Next(35, 90));
-        KeyUp(vk);
-        Console.WriteLine($"[Input] 按键 {key} (VK=0x{vk:X2})");
-    }
-
-    /// <summary>按住一个键约 durationMs 后松开（长按，移动用；时长 ±10% 抖动）。</summary>
-    public static void HoldKey(string key, int durationMs) => HoldKeys(new[] { key }, durationMs);
-
-    /// <summary>同时按住多个键（组合键/移动组合，如 sprint 前进 = ["move_forward", "sprint"]），
-    /// 依次按下 → 保持（时长 ±10% 抖动）→ 逆序松开。任何异常都会确保全部松开。</summary>
-    public static void HoldKeys(IReadOnlyList<string> keys, int durationMs)
-    {
-        if (keys.Count == 0) return;
-        var vks = keys.Select(k => MapKeyName(k)).ToArray();
-        int bad = vks.Count(v => v == 0);
-        if (bad > 0)
-            throw new ArgumentException($"有 {bad} 个不认识的按键名: {string.Join(",", keys.Where((_, i) => vks[i] == 0))}");
-
-        int hold = (int)(durationMs * (0.92 + Rng.NextDouble() * 0.16));
-        Console.WriteLine($"[Input] 组合长按 [{string.Join("+", keys)}] 请求 {durationMs}ms → 实际 {hold}ms");
+        var tokens = SplitCombo(key);
+        if (tokens.Count == 0) return;
         try
         {
-            foreach (var vk in vks)
+            foreach (var t in tokens)
             {
-                KeyDown(vk);
-                Thread.Sleep(Rng.Next(15, 30)); // 依次按下，模拟人手顺序
+                TokenDown(t);
+                Thread.Sleep(Rand(Config.KeyGapMin, Config.KeyGapMax));
+            }
+            Thread.Sleep(Rand(Config.KeyTapMin, Config.KeyTapMax));
+        }
+        finally
+        {
+            ReleaseAllHeldKeys();
+        }
+        Console.WriteLine($"[Input] 按键 {key}");
+    }
+
+    /// <summary>按住一组键约 durationMs 后松开（长按，移动用；时长按配置抖动）。</summary>
+    public static void HoldKey(string key, int durationMs) => HoldKeys(new[] { key }, durationMs);
+
+    /// <summary>同时按住多个键/组合串（如 sprint 前进 = ["move_forward", "sprint"]，或 "ctrl+left"），
+    /// 依次按下 → 保持 → 兜底全释放。任何异常都会确保全部松开。</summary>
+    public static void HoldKeys(IReadOnlyList<string> keys, int durationMs)
+    {
+        var tokens = FlattenTokens(keys);
+        if (tokens.Count == 0) return;
+
+        double jitter = Config.HoldJitterMin + Rng.NextDouble() * (Config.HoldJitterMax - Config.HoldJitterMin);
+        int hold = (int)(durationMs * jitter);
+        Console.WriteLine($"[Input] 组合长按 [{string.Join("+", tokens)}] 请求 {durationMs}ms → 实际 {hold}ms");
+        try
+        {
+            foreach (var t in tokens)
+            {
+                TokenDown(t);
+                Thread.Sleep(Rand(Config.KeyGapMin, Config.KeyGapMax)); // 依次按下，模拟人手顺序
             }
             Thread.Sleep(Math.Max(30, hold));
         }
         finally
         {
-            ReleaseAllHeldKeys(); // 逆序 + 兜底全释放
+            ReleaseAllHeldKeys(); // 兜底全释放
         }
     }
 
@@ -174,33 +191,53 @@ public static class InputService
     /// 结束前必须调用 <see cref="ReleaseAllHeldKeys"/>（建议配 try/finally 或急停处理）。</summary>
     public static void PressKeys(IReadOnlyList<string> keys)
     {
-        if (keys.Count == 0) return;
-        var vks = keys.Select(k => MapKeyName(k)).ToArray();
-        int bad = vks.Count(v => v == 0);
-        if (bad > 0)
-            throw new ArgumentException($"有 {bad} 个不认识的按键名: {string.Join(",", keys.Where((_, i) => vks[i] == 0))}");
-        foreach (var vk in vks)
+        var tokens = FlattenTokens(keys);
+        if (tokens.Count == 0) return;
+        foreach (var t in tokens)
         {
-            KeyDown(vk);
-            Thread.Sleep(Rng.Next(15, 30));
+            TokenDown(t);
+            Thread.Sleep(Rand(Config.KeyGapMin, Config.KeyGapMax));
         }
-        Console.WriteLine($"[Input] 持续按住 [{string.Join("+", keys)}]（需手动释放）");
+        Console.WriteLine($"[Input] 持续按住 [{string.Join("+", tokens)}]（需手动释放）");
     }
 
-    /// <summary>释放所有仍处于按下状态的键（急停/异常兜底用，可重复调用）。</summary>
+    /// <summary>释放所有仍处于按下状态的键/鼠标键（急停/异常兜底用，可重复调用）。</summary>
     public static void ReleaseAllHeldKeys()
     {
         ushort[] held;
+        uint[] heldMouse;
         lock (HeldLock)
         {
             held = HeldKeys.ToArray();
+            heldMouse = HeldMouseButtons.ToArray();
         }
         foreach (var vk in held.Reverse())
             SendKeyEvent(vk, KEYEVENTF_KEYUP);
+        foreach (var down in heldMouse.Reverse())
+            SendMouse(down << 1); // UP = DOWN << 1（left/right/middle 均如此）
         lock (HeldLock)
         {
             HeldKeys.Clear();
+            HeldMouseButtons.Clear();
         }
+    }
+
+    private static void TokenDown(string token)
+    {
+        if (IsMouseToken(token))
+        {
+            uint down = MouseDownFlag(token);
+            lock (HeldLock)
+            {
+                if (!HeldMouseButtons.Add(down)) return; // 已在按下状态
+            }
+            SendMouse(down);
+            return;
+        }
+
+        ushort vk = MapKeyName(token);
+        if (vk == 0) throw new ArgumentException($"不认识的按键名: {token}");
+        KeyDown(vk);
     }
 
     private static void KeyDown(ushort vk)
@@ -212,13 +249,32 @@ public static class InputService
         SendKeyEvent(vk, 0);
     }
 
-    private static void KeyUp(ushort vk)
+    private static bool IsMouseToken(string token) =>
+        token.Equals("left", StringComparison.OrdinalIgnoreCase)
+        || token.Equals("right", StringComparison.OrdinalIgnoreCase)
+        || token.Equals("middle", StringComparison.OrdinalIgnoreCase);
+
+    private static uint MouseDownFlag(string token) => token.ToLowerInvariant() switch
     {
-        lock (HeldLock)
-        {
-            if (!HeldKeys.Remove(vk)) return; // 已松开
-        }
-        SendKeyEvent(vk, KEYEVENTF_KEYUP);
+        "left" => MOUSEEVENTF_LEFTDOWN,
+        "right" => MOUSEEVENTF_RIGHTDOWN,
+        "middle" => MOUSEEVENTF_MIDDLEDOWN,
+        _ => 0,
+    };
+
+    private static List<string> FlattenTokens(IReadOnlyList<string> keys)
+    {
+        var tokens = new List<string>();
+        foreach (var k in keys)
+            tokens.AddRange(SplitCombo(k));
+        return tokens;
+    }
+
+    /// <summary>把 "ctrl+left" 之类的组合串按 '+' 拆成 token 列表（供组合键与测试用）。</summary>
+    public static IReadOnlyList<string> SplitCombo(string key)
+    {
+        if (string.IsNullOrWhiteSpace(key)) return Array.Empty<string>();
+        return key.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     }
 
     /// <summary>修饰键用左侧具体键码（VK_LSHIFT/LCONTROL/LMENU）。
@@ -278,7 +334,7 @@ public static class InputService
         Thread.Sleep(20);
     }
 
-    /// <summary>按键名/字符 → 虚拟键码。支持单字符（字母/数字/常用符号）及常用名。</summary>
+    /// <summary>按键名/字符 → 虚拟键码。支持单字符（字母/数字/常用符号）及常用名（组合串请先 SplitCombo）。</summary>
     public static ushort MapKeyName(string key)
     {
         if (string.IsNullOrEmpty(key)) return 0;

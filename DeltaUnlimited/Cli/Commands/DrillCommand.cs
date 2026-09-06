@@ -20,6 +20,8 @@ public static class DrillCommand
         const double minScore = 3.0; // 帧差阈值：低于此值视为"没动"
         const int settleMs = 450;    // 动作结束后的稳定等待
         int turnPx = (int)Math.Round(runtime.PxPer90Deg); // 右转 90° 的像素量（runtime.json 标定，与 EDPI 相关）
+        if (turnPx <= 0)
+            throw new InvalidOperationException("转向参数未标定（data/runtime.json 的 px_per_90deg ≤ 0）：请先标定后再跑 drill。");
 
         var ops = data.LoadGameOps();
         string fwdKey = ops.KeyMap.GetValueOrDefault("move_forward", "w");

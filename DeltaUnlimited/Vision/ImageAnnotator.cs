@@ -26,8 +26,6 @@ public static class ImageAnnotator
         Save(img, outPath);
     }
 
-    public sealed record MatchResult(bool Found, double Confidence, int CenterX, int CenterY, int W, int H);
-
     /// <summary>template 策略验证：模板匹配 + 画框，返回最佳位置（中心点用于后续填 coord）。</summary>
     public static MatchResult AnnotateTemplate(string imagePath, string outPath, string templatePath, double threshold, string label)
     {

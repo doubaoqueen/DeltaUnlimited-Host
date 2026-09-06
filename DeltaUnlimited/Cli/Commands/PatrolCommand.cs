@@ -18,6 +18,8 @@ public static class PatrolCommand
         double stuckThreshold = cmdArgs.Length > 2 && double.TryParse(cmdArgs[2], out double st) ? st : 4.0;
         int needLow = cmdArgs.Length > 3 && int.TryParse(cmdArgs[3], out int nl) ? nl : 3;
         int turnPx = cmdArgs.Length > 4 && int.TryParse(cmdArgs[4], out int tp) ? tp : (int)Math.Round(runtime.PxPer90Deg);
+        if (turnPx <= 0)
+            throw new InvalidOperationException("转向参数未标定（data/runtime.json 的 px_per_90deg ≤ 0）：请先标定或用第 4 参数临时指定。");
         string winKeyword = cmdArgs.Length > 5 ? cmdArgs[5] : runtime.WindowKeyword;
 
         const double sampleEveryMs = 350;
@@ -49,7 +51,7 @@ public static class PatrolCommand
             stuckEvents++;
             int total = stuckEvents + driftEvents;
             Console.WriteLine($"  ⚠️ [t={t:F1}s] {reason}（贴墙#{stuckEvents} / 横移#{driftEvents}）→ 松开前进键");
-            StatusLog.Append(repoRoot, $"⚠️ {reason}（贴墙#{stuckEvents}/横移#{driftEvents}）→ 右转");
+            Logger.Warn($"{reason}（贴墙#{stuckEvents}/横移#{driftEvents}）→ 右转");
             InputService.ReleaseAllHeldKeys();
             Thread.Sleep(400);
             Console.WriteLine("  ↻ 右转中...");
@@ -70,7 +72,7 @@ public static class PatrolCommand
             InputService.EnsureForeground(hwnd);
             InputService.PressKeys(new[] { fwdKey, sprintKey });
             Console.WriteLine("▶ 开始冲刺前进...");
-            StatusLog.Append(repoRoot, "▶ 巡逻开始：持续冲刺前进，受阻自动转向");
+            Logger.Info("▶ 巡逻开始：持续冲刺前进，受阻自动转向");
 
             while ((DateTime.Now - start).TotalSeconds < maxSeconds)
             {
@@ -95,7 +97,7 @@ public static class PatrolCommand
                         if (samples % 8 == 0)
                         {
                             Console.WriteLine($"  [t={t:F1}s] 运动差 {d:F2}（移动中·心跳）");
-                            StatusLog.Append(repoRoot, $"巡逻 t={t:F1}s 运动差 {d:F2}");
+                            Logger.Info($"巡逻 t={t:F1}s 运动差 {d:F2}");
                         }
                     }
 
@@ -116,7 +118,7 @@ public static class PatrolCommand
 
         double avg = samples > 0 ? diffSum / samples : 0;
         Console.WriteLine($"\n🏁 巡逻结束：运行 {(DateTime.Now - start):hh\\:mm\\:ss} | 采样 {samples} 次 | 平均运动差 {avg:F2} | 贴墙事件 {stuckEvents} | 横移/低效事件 {driftEvents}");
-        StatusLog.Append(repoRoot, $"🏁 巡逻结束：采样 {samples} 平均差 {avg:F2} 贴墙 {stuckEvents} 横移 {driftEvents}");
+        Logger.Info($"🏁 巡逻结束：采样 {samples} 平均差 {avg:F2} 贴墙 {stuckEvents} 横移 {driftEvents}");
         Console.WriteLine("转角标定（与 EDPI=DPI×游戏灵敏度 相关，换设置需重标）:");
         Console.WriteLine("  面朝固定参照物 → 重复执行 turn 1000 0 直到回到原方向，记次数 n（转一圈约需 n 次）");
         Console.WriteLine($"  → 90° 的 px ≈ 250×n，当前标定值 {runtime.PxPer90Deg} 已存 data/runtime.json（EDPI 变化时更新它，或用第 4 参临时覆盖）");

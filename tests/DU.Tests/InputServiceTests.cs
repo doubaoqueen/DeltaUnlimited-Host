@@ -28,4 +28,19 @@ public class InputServiceTests
     [Fact]
     public void MapKeyName_UnknownKey_ReturnsZero()
         => Assert.Equal((ushort)0, InputService.MapKeyName("不存在的键名"));
+
+    [Theory]
+    [InlineData("ctrl+left", 2)]
+    [InlineData("w", 1)]
+    [InlineData("w+shift", 2)]
+    [InlineData("", 0)]
+    public void SplitCombo_SplitsByPlus(string combo, int expectedCount)
+        => Assert.Equal(expectedCount, InputService.SplitCombo(combo).Count);
+
+    [Fact]
+    public void SplitCombo_TrimsWhitespace()
+    {
+        var tokens = InputService.SplitCombo(" ctrl + left ");
+        Assert.Equal(new[] { "ctrl", "left" }, tokens);
+    }
 }

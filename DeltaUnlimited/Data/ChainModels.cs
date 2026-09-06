@@ -50,4 +50,16 @@ public sealed class ChainStep
 
     [JsonPropertyName("screen")]
     public string? Screen { get; set; }
+
+    /// <summary>click_element 专用：点击后必须进入的目标界面（配合 timeout_ms 轮询验证，防止"点了就当成功"）。</summary>
+    [JsonPropertyName("expect_screen")]
+    public string? ExpectScreen { get; set; }
+
+    /// <summary>expect_screen 轮询超时（毫秒），默认 8000。</summary>
+    [JsonPropertyName("timeout_ms")]
+    public int? TimeoutMs { get; set; }
+
+    /// <summary>额外重试次数（总点击次数 = retries + 1），默认 0。</summary>
+    [JsonPropertyName("retries")]
+    public int? Retries { get; set; }
 }

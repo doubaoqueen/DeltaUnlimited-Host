@@ -4,5 +4,23 @@
   "window_keyword": "三角洲行动",
   "px_per_90deg": 4500,
   "design_width": 1920,
-  "design_height": 1080
+  "design_height": 1080,
+  "humanizer": {
+    "click_pause_min": 150,
+    "click_pause_max": 320,
+    "press_hold_min": 100,
+    "press_hold_max": 220,
+    "key_tap_min": 35,
+    "key_tap_max": 90,
+    "key_gap_min": 15,
+    "key_gap_max": 30,
+    "mouse_step_delay_min": 3,
+    "mouse_step_delay_max": 11,
+    "step_extra_min": 3,
+    "step_extra_max": 8,
+    "step_jitter_min": 0.8,
+    "step_jitter_max": 1.2,
+    "hold_jitter_min": 0.92,
+    "hold_jitter_max": 1.08
+  }
 }

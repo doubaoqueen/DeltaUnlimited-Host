@@ -19,6 +19,7 @@ public static class ScreenDetector
         var list = new List<Candidate>();
         foreach (var (name, def) in table.Screens)
         {
+            if (def.Enabled == false) continue; // 显式禁用
             if (def.Markers.Count == 0) continue; // 无标记的界面不可检测（等待补模板）
 
             bool all = true;
@@ -40,6 +41,14 @@ public static class ScreenDetector
         }
         return list.OrderByDescending(c => c.Confidence).ToList();
     }
+
+    /// <summary>列出"未配置任何标记"的界面名（诊断提示用，避免静默失败）。</summary>
+    public static IReadOnlyList<string> UnconfiguredScreens(ScreenTable table)
+        => table.Screens
+            .Where(kv => kv.Value.Enabled != false && kv.Value.Markers.Count == 0)
+            .Select(kv => kv.Key)
+            .OrderBy(x => x)
+            .ToList();
 
     /// <summary>检测当前界面；无任何屏幕完全命中返回 null（未知界面）。</summary>
     public static ScreenGuess? Detect(Mat frame, ScreenTable table, string repoRoot)

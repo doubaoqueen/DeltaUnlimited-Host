@@ -135,9 +135,6 @@ public static class CaptureService
         // 排除自己的控制台窗口（cmd 标题含命令行，会把自己匹配进来）
         IntPtr ownConsole = GetConsoleWindow();
         var wins = ListTopLevelWindows();
-        Console.WriteLine($"[debug] 控制台窗口=0x{ownConsole.ToInt64():X}");
-        foreach (var w in wins)
-            Console.WriteLine($"[debug]   0x{w.Hwnd.ToInt64():X}{(w.Hwnd == ownConsole ? " [本控制台]" : "")}  {w.Title}");
         var hit = wins.FirstOrDefault(w => w.Hwnd != ownConsole && !IsConsoleHostTitle(w.Title) && w.Title.Contains(titleKeyword, StringComparison.OrdinalIgnoreCase));
         if (hit.Hwnd == IntPtr.Zero)
         {

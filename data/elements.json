@@ -2,11 +2,6 @@
   "schema_version": 1,
   "说明": "界面元素识别表（混合识别策略，BetterGI 式）：语义名 -> 识别策略。workflows 只引用元素名，识别方式在这里切换（coord/template/ocr/color），改识别手段不改流程、不改代码。",
   "elements": {
-    "hall_match_button": {
-      "note": "大厅-开始匹配按钮（固定 UI，坐标策略）",
-      "strategy": "coord",
-      "params": { "x": null, "y": null }
-    },
     "matchmaking_state": {
       "note": "匹配中界面判定（OCR 识别'匹配'相关文字）",
       "strategy": "ocr",

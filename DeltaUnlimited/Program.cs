@@ -1,11 +1,29 @@
+using System.Reflection;
 using DeltaUnlimited.Cli;
 using DeltaUnlimited.Cli.Commands;
 using DeltaUnlimited.Data;
+using DeltaUnlimited.Input;
+using DeltaUnlimited.Overlay;
 
-// ===== DeltaUnlimited 入口：只负责解析命令并分发到各命令类（具体实现见 Cli/Commands/） =====
+// ===== DeltaUnlimited 入口：只负责启动初始化、版本信息、命令路由分发 =====
 
 var root = DataStore.FindRoot();
 var store = new DataStore(root);
+Logger.Init(root);
+
+var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
+Console.WriteLine($"DeltaUnlimited v{version}（开发期 CLI）");
+
+// 拟人化参数注入（runtime.json 可覆盖）
+var runtime = store.LoadRuntime();
+InputService.Configure(runtime.Humanizer ?? new HumanizerConfig());
+
+// #12: 转向未标定警告
+if (runtime.PxPer90Deg <= 0)
+{
+    Console.WriteLine("⚠️ 转向参数未标定（data/runtime.json 的 px_per_90deg ≤ 0）：请运行 turn 命令标定，或手动编辑该值。");
+}
+
 var command = args.Length > 0 ? args[0].ToLowerInvariant() : "smoke";
 
 try
@@ -29,6 +47,7 @@ try
 }
 catch (Exception ex)
 {
-    Console.Error.WriteLine($"❌ {ex.Message}");
+    // #3: 打印完整异常（消息 + 堆栈 + 内部异常），出问题直接定位
+    Console.Error.WriteLine(ex.ToString());
     Environment.ExitCode = 1;
 }

@@ -35,13 +35,13 @@ public static class OverlayCommand
         Console.WriteLine("状态来源: logs/status.log —— 运行 chain/patrol/click 等命令会实时刷新。Ctrl+C 关闭。");
         StatusOverlay.Start(rect.Value.X, rect.Value.Y, rect.Value.W, rect.Value.H);
 
-        string logPath = Path.Combine(repoRoot, "logs", "status.log");
         while (true)
         {
             try
             {
                 var tail = new List<string>();
-                if (File.Exists(logPath))
+                string logPath = Logger.LatestLogPath(); // 最新按日日志
+                if (logPath != "" && File.Exists(logPath))
                 {
                     string[] all = File.ReadAllLines(logPath);
                     int start = Math.Max(0, all.Length - 12);

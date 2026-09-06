@@ -1,9 +1,9 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace DeltaUnlimited.Data;
 
-/// <summary>节点图 workflows/*.json —— 引擎输入格式（与 Python 版一致）。</summary>
+/// <summary>节点图 workflows/*.json —— 节点图引擎输入格式（引擎待实现，当前由顺序链路 chain 替代）。</summary>
 public sealed class Workflow
 {
     [JsonPropertyName("name")]

@@ -31,6 +31,6 @@ public static class SmokeCommand
         Console.WriteLine($"[demo_smoke.json] '{wf.Name}': {wf.Nodes.Count} 节点, {wf.Edges.Count} 边");
 
         Console.WriteLine("\nPhase 0 数据层验证完成 ✅");
-        Console.WriteLine("提示：dotnet run -- annotate hall_match_button  可跑静态视觉冒烟");
+        Console.WriteLine("提示：dotnet run -- annotate depart_button  可跑静态视觉冒烟");
     }
 }

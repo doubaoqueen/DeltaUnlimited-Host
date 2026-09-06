@@ -1,18 +1,26 @@
+using System.Collections.Concurrent;
 using OpenCvSharp;
 
 namespace DeltaUnlimited.Vision;
 
-/// <summary>内存帧模板匹配（不落盘）：链路的 if_template 步骤与后续状态检测用。</summary>
+/// <summary>内存帧模板匹配（不落盘）：链路的 if_template 步骤与后续状态检测用。
+/// 模板按路径缓存于内存，避免循环中反复读盘（#4）。</summary>
 public static class TemplateMatcher
 {
-    public sealed record MatchResult(bool Found, double Confidence, int CenterX, int CenterY, int W, int H);
+    private static readonly ConcurrentDictionary<string, Mat> TemplateCache = new();
+
+    /// <summary>清空模板缓存并释放内存（程序退出/测试清理用）。</summary>
+    public static void ClearCache()
+    {
+        foreach (var kv in TemplateCache)
+            kv.Value.Dispose();
+        TemplateCache.Clear();
+    }
 
     /// <summary>在帧内找模板的最佳位置，返回是否命中（置信度 ≥ threshold）及中心点。</summary>
     public static MatchResult Match(Mat frame, string templatePath, double threshold)
     {
-        using var tpl = Cv2.ImRead(templatePath, ImreadModes.Color);
-        if (tpl.Empty())
-            throw new FileNotFoundException($"无法读取模板图片: {templatePath}");
+        Mat tpl = LoadTemplate(templatePath);
         if (tpl.Width >= frame.Width || tpl.Height >= frame.Height)
             throw new InvalidDataException($"模板 ({tpl.Width}x{tpl.Height}) 不小于画面 ({frame.Width}x{frame.Height})，无法匹配");
 
@@ -45,5 +53,16 @@ public static class TemplateMatcher
         {
             conv?.Dispose();
         }
+    }
+
+    private static Mat LoadTemplate(string path)
+    {
+        return TemplateCache.GetOrAdd(path, p =>
+        {
+            var tpl = Cv2.ImRead(p, ImreadModes.Color);
+            if (tpl.Empty())
+                throw new FileNotFoundException($"无法读取模板图片: {p}");
+            return tpl;
+        });
     }
 }

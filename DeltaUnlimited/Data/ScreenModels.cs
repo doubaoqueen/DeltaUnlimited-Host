@@ -18,6 +18,9 @@ public sealed class ScreenTable
 /// <summary>单个界面定义：markers 全部命中即判定为该界面（分数取最差命中置信度）。</summary>
 public sealed class ScreenDef
 {
+    [JsonPropertyName("enabled")]
+    public bool? Enabled { get; set; } // false = 显式禁用（识别器跳过，避免静默失败）
+
     [JsonPropertyName("note")]
     public string? Note { get; set; }
 

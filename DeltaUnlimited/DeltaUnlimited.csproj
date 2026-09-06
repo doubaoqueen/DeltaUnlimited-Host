@@ -1,10 +1,11 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <Version>0.3.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
@@ -12,6 +13,13 @@
     <PackageReference Include="OpenCvSharp4.runtime.win" Version="4.13.0.20260627" />
     <PackageReference Include="Vanara.PInvoke.Gdi32" Version="5.0.7" />
     <PackageReference Include="Vanara.PInvoke.User32" Version="5.0.7" />
+  </ItemGroup>
+
+  <!-- #1: 运行时数据随构建/发布复制到输出目录（发布后无需依赖仓库目录结构） -->
+  <ItemGroup>
+    <None Include="..\data\**\*" CopyToOutputDirectory="PreserveNewest" LinkBase="data" />
+    <None Include="..\workflows\**\*" CopyToOutputDirectory="PreserveNewest" LinkBase="workflows" />
+    <None Include="..\assets\**\*" CopyToOutputDirectory="PreserveNewest" LinkBase="assets" />
   </ItemGroup>
 
 </Project>
