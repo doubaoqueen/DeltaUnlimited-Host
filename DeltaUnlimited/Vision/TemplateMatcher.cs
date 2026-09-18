@@ -17,20 +17,38 @@ public static class TemplateMatcher
         TemplateCache.Clear();
     }
 
-    /// <summary>在帧内找模板的最佳位置，返回是否命中（置信度 ≥ threshold）及中心点。</summary>
-    public static MatchResult Match(Mat frame, string templatePath, double threshold)
+    /// <summary>在帧内找模板的最佳位置，返回是否命中（置信度 ≥ threshold）及中心点。
+    /// region = [x, y, w, h] 可选：只在区域内搜索（更快、更抗干扰）。</summary>
+    public static MatchResult Match(Mat frame, string templatePath, double threshold, int[]? region = null)
     {
         Mat tpl = LoadTemplate(templatePath);
-        if (tpl.Width >= frame.Width || tpl.Height >= frame.Height)
-            throw new InvalidDataException($"模板 ({tpl.Width}x{tpl.Height}) 不小于画面 ({frame.Width}x{frame.Height})，无法匹配");
+        Mat? roi = null;
+        Mat src = frame;
+        int offX = 0, offY = 0;
+        if (region is { Length: 4 })
+        {
+            int rx = Math.Clamp(region[0], 0, frame.Width - 1);
+            int ry = Math.Clamp(region[1], 0, frame.Height - 1);
+            int rw = Math.Clamp(region[2], 1, frame.Width - rx);
+            int rh = Math.Clamp(region[3], 1, frame.Height - ry);
+            roi = new Mat(frame, new Rect(rx, ry, rw, rh));
+            src = roi;
+            offX = rx;
+            offY = ry;
+        }
+
+        if (tpl.Width >= src.Width || tpl.Height >= src.Height)
+        {
+            roi?.Dispose();
+            throw new InvalidDataException($"模板 ({tpl.Width}x{tpl.Height}) 不小于搜索区域 ({src.Width}x{src.Height})，无法匹配");
+        }
 
         // 实时帧是 BGRA(4通道)，模板是 BGR(3通道)：统一转成 BGR 再匹配
         Mat? conv = null;
-        Mat src = frame;
-        if (frame.Channels() == 4)
+        if (src.Channels() == 4)
         {
             conv = new Mat();
-            Cv2.CvtColor(frame, conv, ColorConversionCodes.BGRA2BGR);
+            Cv2.CvtColor(src, conv, ColorConversionCodes.BGRA2BGR);
             src = conv;
         }
 
@@ -44,14 +62,15 @@ public static class TemplateMatcher
             return new MatchResult(
                 found,
                 maxVal,
-                found ? maxLoc.X + tpl.Width / 2 : 0,
-                found ? maxLoc.Y + tpl.Height / 2 : 0,
+                found ? offX + maxLoc.X + tpl.Width / 2 : 0,
+                found ? offY + maxLoc.Y + tpl.Height / 2 : 0,
                 tpl.Width,
                 tpl.Height);
         }
         finally
         {
             conv?.Dispose();
+            roi?.Dispose();
         }
     }
 

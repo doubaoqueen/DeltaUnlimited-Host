@@ -24,6 +24,8 @@ public static class ChainCommand
         var screens = data.LoadScreens();
         string winKeyword = runtime.WindowKeyword;
 
+        ValidateChain(chain, elements, screens, repoRoot); // 加载期交叉校验：启动即报错，而非运行时盲等
+
         IntPtr hwnd = CaptureService.FindWindowByTitle(winKeyword);
         if (hwnd == IntPtr.Zero) throw new InvalidOperationException($"没找到标题含 “{winKeyword}” 的窗口");
 
@@ -62,7 +64,7 @@ public static class ChainCommand
                     bool ok = false;
                     for (int attempt = 0; attempt <= retries; attempt++)
                     {
-                        ClickElementStep(hwnd, elements, elName, runtime.DesignWidth, runtime.DesignHeight);
+                        ClickElementStep(hwnd, elements, elName, runtime.DesignWidth, runtime.DesignHeight, repoRoot);
                         Logger.Info($"点击元素 {elName}（第 {attempt + 1}/{retries + 1} 次）");
 
                         if (string.IsNullOrEmpty(s.ExpectScreen))
@@ -102,6 +104,27 @@ public static class ChainCommand
 
                 case "wait":
                     break; // 统一在步骤末尾按 wait_ms 等待
+
+                case "wait_screen":
+                {
+                    string want = s.Screen ?? throw new InvalidDataException("wait_screen 步骤缺少 screen 字段");
+                    int timeoutMs = s.TimeoutMs ?? 120000;
+                    bool absent = s.Absent == true;
+                    Console.WriteLine($"  ⏳ 等待界面 {want} {(absent ? "消失" : "出现")}（最长 {timeoutMs}ms）...");
+                    bool reached = WaitForScreenState(runtime, screens, repoRoot, want, timeoutMs, absent);
+                    Logger.Info($"等待界面 {want}{(absent ? "消失" : "出现")}: {(reached ? "达成" : "超时")}");
+                    if (!reached)
+                    {
+                        if (!string.IsNullOrEmpty(s.JumpTo))
+                        {
+                            Console.WriteLine($"  ⏱ 超时，跳转到 “{s.JumpTo}”");
+                            i = FindStep(s.JumpTo);
+                            continue;
+                        }
+                        throw new InvalidOperationException($"等待界面 {want} {(absent ? "消失" : "出现")} 超时（{timeoutMs}ms）");
+                    }
+                    break;
+                }
 
                 case "detect":
                 {
@@ -197,6 +220,10 @@ public static class ChainCommand
 
     /// <summary>轮询等待目标界面出现（expect_screen 用），超时返回 false。</summary>
     private static bool WaitForScreen(RuntimeConfig runtime, ScreenTable screens, string repoRoot, string want, int timeoutMs)
+        => WaitForScreenState(runtime, screens, repoRoot, want, timeoutMs, wantAbsent: false);
+
+    /// <summary>轮询等待目标界面出现/消失（wait_screen 用），超时返回 false。</summary>
+    private static bool WaitForScreenState(RuntimeConfig runtime, ScreenTable screens, string repoRoot, string want, int timeoutMs, bool wantAbsent)
     {
         var deadline = DateTime.Now.AddMilliseconds(timeoutMs);
         while (DateTime.Now < deadline)
@@ -205,32 +232,85 @@ public static class ChainCommand
             using var frame = CaptureService.CaptureWindowMat(runtime.WindowKeyword, raiseAndWait: false);
             using var norm = FrameTools.Normalize(frame, runtime.DesignWidth, runtime.DesignHeight);
             var guess = ScreenDetector.Detect(norm, screens, repoRoot);
-            if (guess?.Name == want) return true;
+            bool hit = guess?.Name == want;
+            if (hit != wantAbsent) return true; // 出现且要出现 / 消失且要消失
         }
         return false;
     }
 
-    /// <summary>点击一个 coord 策略元素：窗口置顶 → 抢焦点 → 设计分辨率坐标缩放 → 拟人化点击。</summary>
-    private static void ClickElementStep(IntPtr hwnd, ElementsTable table, string elementName, int designW, int designH)
-    {
-        if (!table.Elements.TryGetValue(elementName, out var def))
-            throw new ArgumentException($"元素表里没有 “{elementName}”");
-        if (def.Strategy != "coord" || def.Params.X is null || def.Params.Y is null)
-            throw new InvalidDataException($"元素 {elementName} 需要 coord 策略且 x/y 已填写");
+    /// <summary>点击一个元素：委托 ElementClicker（coord 兜底 / ocr 主力，降级链见其实现）。</summary>
+    private static void ClickElementStep(IntPtr hwnd, ElementsTable table, string elementName, int designW, int designH, string repoRoot)
+        => ElementClicker.Click(hwnd, table, elementName, designW, designH, repoRoot);
 
-        CaptureService.RaiseWindow(hwnd);
-        Thread.Sleep(250);
-        InputService.EnsureForeground(hwnd); // 部分游戏非前台时忽略鼠标点击
-        Thread.Sleep(200);
-        var r = CaptureService.GetClientScreenRect(hwnd);
-        if (r is null)
+    /// <summary>加载期交叉校验（P0）：引用不存在的元素/无标记界面/缺失模板/非法按键 → 启动即报错。</summary>
+    private static void ValidateChain(Chain chain, ElementsTable elements, ScreenTable screens, string repoRoot)
+    {
+        var errors = new List<string>();
+        foreach (var (s, idx) in chain.Steps.Select((s, i) => (s, i + 1)))
         {
-            CaptureService.UnraiseWindow(hwnd);
-            throw new InvalidOperationException("点击前窗口不可用（最小化？）");
+            switch (s.Op)
+            {
+                case "click_element":
+                    if (string.IsNullOrEmpty(s.Element))
+                        errors.Add($"步骤{idx}: click_element 缺少 element");
+                    else if (!elements.Elements.ContainsKey(s.Element))
+                        errors.Add($"步骤{idx}: 元素 “{s.Element}” 不存在于 elements.json");
+                    else
+                    {
+                        var def = elements.Elements[s.Element];
+                        if (def.Strategy == "ocr" && def.Params.Keywords is not { Count: > 0 })
+                            errors.Add($"步骤{idx}: 元素 “{s.Element}” 用 ocr 策略但缺少 keywords");
+                        else if (def.Strategy == "coord" && (def.Params.X is null || def.Params.Y is null))
+                            errors.Add($"步骤{idx}: 元素 “{s.Element}” 用 coord 策略但缺少 x/y");
+                    }
+                    break;
+
+                case "if_screen":
+                case "wait_screen":
+                    if (string.IsNullOrEmpty(s.Screen))
+                        errors.Add($"步骤{idx}: {s.Op} 缺少 screen");
+                    else if (!screens.Screens.ContainsKey(s.Screen))
+                        errors.Add($"步骤{idx}: 界面 “{s.Screen}” 不存在于 screens.json");
+                    else if (screens.Screens[s.Screen].Markers.Count == 0)
+                        errors.Add($"步骤{idx}: 界面 “{s.Screen}” 没有任何识别标记（引用无标记界面）");
+                    break;
+
+                case "if_template":
+                    if (string.IsNullOrEmpty(s.Template))
+                        errors.Add($"步骤{idx}: if_template 缺少 template");
+                    else if (!File.Exists(Path.Combine(repoRoot, s.Template)))
+                        errors.Add($"步骤{idx}: 模板文件不存在: {s.Template}");
+                    break;
+
+                case "key":
+                    if (string.IsNullOrEmpty(s.Key))
+                        errors.Add($"步骤{idx}: key 缺少 key");
+                    else
+                    {
+                        foreach (var t in InputService.SplitCombo(s.Key))
+                        {
+                            bool mouse = t.Equals("left", StringComparison.OrdinalIgnoreCase)
+                                         || t.Equals("right", StringComparison.OrdinalIgnoreCase)
+                                         || t.Equals("middle", StringComparison.OrdinalIgnoreCase);
+                            if (!mouse && InputService.MapKeyName(t) == 0)
+                                errors.Add($"步骤{idx}: 不认识的按键名 “{t}”（组合 {s.Key}）");
+                        }
+                    }
+                    break;
+            }
+
+            if (!string.IsNullOrEmpty(s.JumpTo) && chain.Steps.All(x => x.Id != s.JumpTo))
+                errors.Add($"步骤{idx}: jump_to “{s.JumpTo}” 指向不存在的步骤 id");
+            if (!string.IsNullOrEmpty(s.ExpectScreen))
+            {
+                if (!screens.Screens.ContainsKey(s.ExpectScreen))
+                    errors.Add($"步骤{idx}: expect_screen “{s.ExpectScreen}” 不存在于 screens.json");
+                else if (screens.Screens[s.ExpectScreen].Markers.Count == 0)
+                    errors.Add($"步骤{idx}: expect_screen “{s.ExpectScreen}” 无识别标记");
+            }
         }
-        int absX = (int)Math.Round(r.Value.X + def.Params.X.Value * (r.Value.W / (double)designW));
-        int absY = (int)Math.Round(r.Value.Y + def.Params.Y.Value * (r.Value.H / (double)designH));
-        InputService.ClickAt(absX, absY);
-        CaptureService.UnraiseWindow(hwnd);
+
+        if (errors.Count > 0)
+            throw new InvalidDataException("链路加载校验失败:\n  " + string.Join("\n  ", errors));
     }
 }

@@ -4,6 +4,7 @@ using DeltaUnlimited.Cli.Commands;
 using DeltaUnlimited.Data;
 using DeltaUnlimited.Input;
 using DeltaUnlimited.Overlay;
+using DeltaUnlimited.Vision.Ocr;
 
 // ===== DeltaUnlimited 入口：只负责启动初始化、版本信息、命令路由分发 =====
 
@@ -13,6 +14,9 @@ Logger.Init(root);
 
 var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
 Console.WriteLine($"DeltaUnlimited v{version}（开发期 CLI）");
+
+// OCR 引擎初始化（Windows.Media.Ocr 先行，Paddle 后补）
+Ocr.Initialize();
 
 // 拟人化参数注入（runtime.json 可覆盖）
 var runtime = store.LoadRuntime();
@@ -40,6 +44,7 @@ try
         case "patrol": PatrolCommand.Run(store, root, args); break;
         case "chain": ChainCommand.Run(store, root, args); break;
         case "crop": CropCommand.Run(root, args); break;
+        case "ocr": OcrProbeCommand.Run(root, args); break;
         case "overlay": OverlayCommand.Run(store, root); break;
         case "windows": WindowsCommand.Run(); break;
         default: Usage.Print(); break;

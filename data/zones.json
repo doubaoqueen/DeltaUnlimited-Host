@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "说明": "具名区域表（设计分辨率 1920×1080 基准）：UI 惯例区，elements/screens 按名引用。区域值待实测校准（OCR 命中包围盒可回填）。",
+  "zones": {
+    "zone_bottom_right": [1300, 880, 620, 200],
+    "zone_center_bottom": [500, 850, 920, 230]
+  }
+}

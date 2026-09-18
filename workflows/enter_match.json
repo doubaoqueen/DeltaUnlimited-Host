@@ -1,18 +1,22 @@
 {
-  "name": "进场链路 v2（界面识别驱动分支）",
-  "说明": "Tab 后用界面识别(detect)判断当前状态：首次(plaza_first 有行前战备)→完整流程；常态(plaza_ready 配装|出发)→点出发。未识别则人工兜底。",
+  "name": "进场链路 v3（常态：非初次进入）",
+  "说明": "自动分支：识别当前界面——已在广场(plaza_ready)→直接点出发；否则(特勤处)按 Tab 后点出发。点击后等待匹配结束（干员选择界面出现，最长 4 分钟），超时人工兜底。",
   "steps": [
-    { "id": "start", "op": "key", "key": "tab", "wait_ms": 1500, "capture": "after_tab" },
-    { "id": "detect_after_tab", "op": "detect" },
-    { "id": "branch_first", "op": "if_screen", "screen": "plaza_first", "jump_to": "first_time" },
-    { "id": "branch_ready", "op": "if_screen", "screen": "plaza_ready", "jump_to": "normal_ready" },
-    { "op": "pause", "message": "未识别出已知界面（待补模板）——人工确认当前状态后回车" },
+    { "id": "detect_start", "op": "detect" },
+    { "id": "branch_ready", "op": "if_screen", "screen": "plaza_ready", "jump_to": "depart" },
+    { "id": "tab_step", "op": "key", "key": "tab", "wait_ms": 1500, "capture": "after_tab" },
+    { "op": "detect" },
+    { "op": "if_screen", "screen": "plaza_ready", "jump_to": "depart" },
+    { "op": "pause", "message": "未识别出广场界面（可能有公告/广告未关闭或处于未知界面），人工处理后回车" },
     { "op": "jump", "jump_to": "end" },
-    { "id": "first_time", "op": "click_element", "element": "plaza_prep_button", "wait_ms": 2000, "capture": "map_select" },
-    { "op": "pause", "message": "首次配置分支：确认已到地图选择界面（后续步骤待标注）" },
+    { "id": "depart", "op": "click_element", "element": "depart_button", "wait_ms": 2000, "capture": "matching" },
+    { "op": "detect" },
+    { "id": "wait_match", "op": "wait_screen", "screen": "char_select", "timeout_ms": 240000, "jump_to": "match_fail" },
+    { "op": "jump", "jump_to": "done" },
+    { "id": "match_fail", "op": "pause", "message": "匹配等待超时或未进入干员选择界面（人工检查，可手动点出发后重新运行本链路）" },
     { "op": "jump", "jump_to": "end" },
-    { "id": "normal_ready", "op": "click_element", "element": "depart_button", "wait_ms": 2000, "capture": "char_select" },
-    { "op": "pause", "message": "常态分支：已点“出发”。确认是否到选人界面（后续步骤待标注）" },
+    { "id": "done", "op": "detect" },
+    { "op": "pause", "message": "已到干员选择界面 —— 进场链路结束" },
     { "id": "end", "op": "pause", "message": "链路结束" }
   ]
 }

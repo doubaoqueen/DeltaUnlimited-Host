@@ -46,6 +46,7 @@ public static class CaptureService
         var list = new List<(IntPtr, string)>();
         EnumWindows((hWnd, _) =>
         {
+            
             if (IsWindowVisible(hWnd))
             {
                 var sb = new StringBuilder(1024);
@@ -376,6 +377,7 @@ public static class CaptureService
 
     [DllImport("gdi32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
+ 
     private static extern bool DeleteObject(IntPtr hObject);
 
     [DllImport("gdi32.dll", SetLastError = true)]

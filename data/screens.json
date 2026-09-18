@@ -1,40 +1,57 @@
 {
   "schema_version": 1,
-  "说明": "界面识别表：markers 全部命中才判定为该界面（分数取最差命中置信度）；无标记的界面暂不可检测，待用 crop 裁模板后补充。",
+  "说明": "界面识别表：任一标记命中即判定为该界面（主标记 + 兜底标记分层）。markers 支持 template（纯图标/兜底）与 ocr（关键词严格命中，主力）；region_name 引用 data/zones.json 具名区。",
   "screens": {
     "lobby": {
-      "note": "游戏大厅（按 Tab 前）",
-      "markers": [],
-      "actions": ["按 Tab 切到游戏广场"]
+      "note": "特勤处（按 Tab 前，底部“Tab 开始游戏”）",
+      "markers": [
+        { "type": "ocr", "keywords": ["开始游戏", "Tab 开始游戏"], "region_name": "zone_center_bottom" }
+      ],
+      "actions": ["按 Tab 切到备战界面"]
     },
     "plaza_first": {
-      "note": "游戏广场-本次启动首次进入（右下有“行前战备”）",
+      "note": "备战界面-首次（右下“行前备战”）",
       "markers": [
+        { "type": "ocr", "keywords": ["行前备战"], "region_name": "zone_bottom_right" },
         { "type": "template", "template": "assets/templates/plaza_prep_button.png", "threshold": 0.85 }
       ],
-      "actions": ["点击 行前战备 → 地图选择"]
+      "actions": ["点击 行前备战 → 地图选择"]
     },
     "plaza_ready": {
-      "note": "游戏广场-常态（右下“配装|出发”）",
+      "note": "备战界面-常态（右下“配装|出发”）",
       "markers": [
+        { "type": "ocr", "keywords": ["配装", "出发"], "region_name": "zone_bottom_right" },
         { "type": "template", "template": "assets/templates/depart_button.png", "threshold": 0.85 }
       ],
-      "actions": ["点击 出发 → 选人界面"]
+      "actions": ["点击 出发 → 匹配"]
     },
     "map_select": {
       "note": "地图选择界面",
-      "markers": [],
+      "markers": [
+        { "type": "ocr", "keywords": ["零号大坝"] }
+      ],
       "actions": ["选择 零号大坝", "点击 开始行动"]
     },
     "loadout": {
-      "note": "战前配装界面",
-      "markers": [],
-      "actions": ["确认配装（跑刀不选贵重物品）"]
+      "note": "配装界面",
+      "markers": [
+        { "type": "ocr", "keywords": ["确认配装"], "region_name": "zone_bottom_right" }
+      ],
+      "actions": ["点击 确认配装"]
+    },
+    "matching": {
+      "note": "匹配中（右下“取消匹配”）",
+      "markers": [
+        { "type": "ocr", "keywords": ["取消匹配"], "region_name": "zone_bottom_right" }
+      ],
+      "actions": ["等待匹配结束"]
     },
     "char_select": {
-      "note": "选人界面",
-      "markers": [],
-      "actions": ["待标注"]
+      "note": "干员选择界面（干员下方“当前干员”）",
+      "markers": [
+        { "type": "ocr", "keywords": ["当前干员"] }
+      ],
+      "actions": ["进场链路终点"]
     }
   }
 }

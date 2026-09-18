@@ -17,6 +17,7 @@ public static class Usage
               patrol [秒数] [阈值] [连续] [90°px] [窗口]   反应式巡逻 v2：贴墙停+横移低效双守卫，自动转向
               chain <workflow文件> [--auto]        按 JSON 步骤执行链路（detect/if_screen 分支/jump）
               crop <x> <y> <w> <h> <源图> [输出] [缩放]   从截图裁模板小图（可缩放换算设计分辨率）
+              ocr <截图路径> [关键词...]      OCR 诊断：识别全部词 + 关键词严格/候选匹配
               overlay                           悬浮状态面板（游戏画面上实时显示识别/操作日志）
               windows                           列出可见窗口
             """);

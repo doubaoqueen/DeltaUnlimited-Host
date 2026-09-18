@@ -31,7 +31,8 @@ public sealed class ScreenDef
     public List<string> Actions { get; set; } = new();
 }
 
-/// <summary>识别标记：type = template（后续扩展 color/ocr）。</summary>
+/// <summary>识别标记：type = template / ocr（后续扩展 color）。
+/// region = [x, y, w, h] 可选，只在该区域搜索；region_name = 引用 data/zones.json 的具名区。</summary>
 public sealed class ScreenMarker
 {
     [JsonPropertyName("type")]
@@ -42,4 +43,13 @@ public sealed class ScreenMarker
 
     [JsonPropertyName("threshold")]
     public double? Threshold { get; set; }
+
+    [JsonPropertyName("keywords")]
+    public List<string>? Keywords { get; set; }
+
+    [JsonPropertyName("region")]
+    public List<int>? Region { get; set; }
+
+    [JsonPropertyName("region_name")]
+    public string? RegionName { get; set; }
 }

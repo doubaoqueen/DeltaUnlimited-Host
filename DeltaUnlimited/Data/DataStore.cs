@@ -56,4 +56,5 @@ public sealed class DataStore
     public RuntimeConfig LoadRuntime() => LoadJson<RuntimeConfig>("data/runtime.json");
     public Chain LoadChain(string file) => LoadJson<Chain>($"workflows/{file}");
     public ScreenTable LoadScreens() => LoadJson<ScreenTable>("data/screens.json");
+    public ZoneTable LoadZones() => LoadJson<ZoneTable>("data/zones.json");
 }

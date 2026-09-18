@@ -44,29 +44,44 @@ public class VisionTests
         Assert.True(FrameDiff.Score(a, b) > 200);
     }
 
-    [Fact]
-    public void TemplateMatcher_FindsPlazaPrepButton_InGamePlazaScreenshot()
+    /// <summary>本地压缩 fixture（ADR #8：基准整图 gitignore + 本地压缩 fixture）。缺失时测试自动跳过。</summary>
+    private static string? FixturePath(string name)
     {
-        string root = RepoRoot;
-        using var frame = Cv2.ImRead(Path.Combine(root, "screenshots", "game-plaza.png"), ImreadModes.Color);
-        Assert.False(frame.Empty());
-
-        var r = TemplateMatcher.Match(frame, Path.Combine(root, "assets", "templates", "plaza_prep_button.png"), 0.9);
-        Assert.True(r.Found);
-        Assert.True(r.Confidence > 0.95, $"置信度过低: {r.Confidence}");
-        Assert.InRange(r.CenterX, 1600, 1700); // 设计中心 1645
-        Assert.InRange(r.CenterY, 950, 980);   // 设计中心 966
+        string path = Path.Combine(RepoRoot, "tests", "fixtures", name);
+        if (File.Exists(path)) return path;
+        Console.WriteLine($"⚠️ 跳过：本地 fixture 缺失 {path}（用真实截图压缩后放入 tests/fixtures/）");
+        return null;
     }
 
     [Fact]
-    public void ScreenDetector_DetectsPlazaFirst_OnGamePlazaScreenshot()
+    public void TemplateMatcher_FindsDepartButton_InPlazaReadyFixture()
     {
         string root = RepoRoot;
-        using var frame = Cv2.ImRead(Path.Combine(root, "screenshots", "game-plaza.png"), ImreadModes.Color);
+        string? fixture = FixturePath("plaza_ready.jpg");
+        if (fixture is null) return;
+
+        using var frame = Cv2.ImRead(fixture, ImreadModes.Color);
+        Assert.False(frame.Empty());
+
+        var r = TemplateMatcher.Match(frame, Path.Combine(root, "assets", "templates", "depart_button.png"), 0.9);
+        Assert.True(r.Found);
+        Assert.True(r.Confidence > 0.9, $"置信度过低: {r.Confidence}");
+        Assert.InRange(r.CenterX, 1680, 1800); // 设计中心 1738
+        Assert.InRange(r.CenterY, 940, 990);   // 设计中心 966
+    }
+
+    [Fact]
+    public void ScreenDetector_DetectsPlazaReady_OnPlazaReadyFixture()
+    {
+        string root = RepoRoot;
+        string? fixture = FixturePath("plaza_ready.jpg");
+        if (fixture is null) return;
+
+        using var frame = Cv2.ImRead(fixture, ImreadModes.Color);
         var table = new DataStore(root).LoadScreens();
 
         var guess = ScreenDetector.Detect(frame, table, root);
         Assert.NotNull(guess);
-        Assert.Equal("plaza_first", guess!.Name);
+        Assert.Equal("plaza_ready", guess!.Name);
     }
 }

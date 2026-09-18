@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 
 namespace DeltaUnlimited.Data;
 
@@ -38,6 +38,7 @@ public sealed class ElementParams
     [JsonPropertyName("threshold")] public double? Threshold { get; set; }
     [JsonPropertyName("keywords")] public List<string>? Keywords { get; set; }
     [JsonPropertyName("region")] public List<int>? Region { get; set; }
+    [JsonPropertyName("region_name")] public string? RegionName { get; set; }
     [JsonPropertyName("r")] public int? R { get; set; }
     [JsonPropertyName("g")] public int? G { get; set; }
     [JsonPropertyName("b")] public int? B { get; set; }

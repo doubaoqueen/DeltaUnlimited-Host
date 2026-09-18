@@ -30,23 +30,32 @@ public class DataStoreTests
     }
 
     [Fact]
-    public void Screens_PlazaReady_HasTemplateMarker()
+    public void Screens_PlazaReady_HasOcrAndTemplateMarkers()
     {
         var table = CreateStore().LoadScreens();
         Assert.True(table.Screens.ContainsKey("plaza_ready"));
         var screen = table.Screens["plaza_ready"];
-        Assert.Single(screen.Markers);
-        Assert.Equal("assets/templates/depart_button.png", screen.Markers[0].Template);
+        Assert.Contains(screen.Markers, m => m.Template == "assets/templates/depart_button.png");
+        Assert.Contains(screen.Markers, m => m.Type == "ocr");
         Assert.NotEmpty(screen.Actions);
+    }
+
+    [Fact]
+    public void Zones_ContainsBottomRight()
+    {
+        var zones = CreateStore().LoadZones();
+        Assert.True(zones.Zones.ContainsKey("zone_bottom_right"));
+        Assert.True(zones.Zones.ContainsKey("zone_center_bottom"));
     }
 
     [Fact]
     public void Chain_EnterMatch_HasBranchSteps()
     {
         var chain = CreateStore().LoadChain("enter_match.json");
-        Assert.True(chain.Steps.Count >= 8);
-        Assert.Contains(chain.Steps, s => s.Id == "normal_ready" && s.Op == "click_element" && s.Element == "depart_button");
+        Assert.True(chain.Steps.Count >= 10);
+        Assert.Contains(chain.Steps, s => s.Id == "depart" && s.Op == "click_element" && s.Element == "depart_button");
         Assert.Contains(chain.Steps, s => s.Op == "if_screen" && s.Screen == "plaza_ready");
+        Assert.Contains(chain.Steps, s => s.Op == "wait_screen" && s.Screen == "char_select");
     }
 
     [Fact]

@@ -62,4 +62,8 @@ public sealed class ChainStep
     /// <summary>额外重试次数（总点击次数 = retries + 1），默认 0。</summary>
     [JsonPropertyName("retries")]
     public int? Retries { get; set; }
+
+    /// <summary>wait_screen 专用：true = 等待界面消失（如"取消匹配"消失），false = 等待出现。</summary>
+    [JsonPropertyName("absent")]
+    public bool? Absent { get; set; }
 }

@@ -1,0 +1,24 @@
+{
+  "name": "进场链路 v0（初次：本次启动第一次进入，含配装确认）",
+  "说明": "按 beforePlayingFlow.md 的初次路线：空格跳公告→Tab→行前备战→地图选择→配装确认→出发→等匹配→干员选择。缺坐标的步骤暂用 pause 人工确认（半自动）。",
+  "steps": [
+    { "op": "pause", "message": "确认在特勤处（若还在模式选择界面，请手动选“烽火地带”后回车）" },
+    { "op": "key", "key": "space", "wait_ms": 800 },
+    { "op": "pause", "message": "确认公告/广告已关闭（若还有，手动空格/关闭后回车）" },
+    { "id": "tab_step", "op": "key", "key": "tab", "wait_ms": 1500, "capture": "after_tab" },
+    { "op": "detect" },
+    { "op": "if_screen", "screen": "plaza_first", "jump_to": "prep" },
+    { "op": "pause", "message": "未识别出“行前备战”界面（可能已在“配装|出发”状态）——回车后按提示继续" },
+    { "id": "prep", "op": "click_element", "element": "plaza_prep_button", "wait_ms": 2000, "capture": "map_select" },
+    { "op": "pause", "message": "地图选择界面：待标点（零号大坝/常规行动/开始行动坐标入库后改为自动点击），现在人工操作后回车" },
+    { "op": "pause", "message": "配装界面：待标点（确认配装/仍要继续坐标入库后自动点击），现在人工操作后回车" },
+    { "op": "click_element", "element": "depart_button", "wait_ms": 2000, "capture": "matching" },
+    { "op": "wait_screen", "screen": "char_select", "timeout_ms": 240000, "jump_to": "match_fail" },
+    { "op": "jump", "jump_to": "done" },
+    { "id": "match_fail", "op": "pause", "message": "匹配等待超时（人工处理）" },
+    { "op": "jump", "jump_to": "end" },
+    { "id": "done", "op": "detect" },
+    { "op": "pause", "message": "已到干员选择界面 —— 进场链路结束" },
+    { "id": "end", "op": "pause", "message": "链路结束" }
+  ]
+}
