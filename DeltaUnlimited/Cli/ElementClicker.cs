@@ -52,7 +52,8 @@ public static class ElementClicker
             }
             else
             {
-                Logger.Warn($"元素 {elementName}: OCR 未命中 [{string.Join("/", def.Params.Keywords)}]，尝试坐标兜底");
+                var hint = Ocr.FindCandidateHint(norm, region, def.Params.Keywords);
+                Logger.Warn($"元素 {elementName}: OCR 未命中 [{string.Join("/", def.Params.Keywords)}]{(hint is null ? "" : "；" + hint)}，尝试坐标兜底");
             }
         }
 

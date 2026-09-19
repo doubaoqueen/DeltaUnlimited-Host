@@ -5,6 +5,7 @@
   "px_per_90deg": 4500,
   "design_width": 1920,
   "design_height": 1080,
+  "ocr_engine": "windows",
   "humanizer": {
     "click_pause_min": 150,
     "click_pause_max": 320,

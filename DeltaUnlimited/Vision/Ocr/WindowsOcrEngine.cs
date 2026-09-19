@@ -70,6 +70,10 @@ public sealed class WindowsOcrEngine : IOcrEngine
                 gray.CopyTo(prepared);
             Cv2.Threshold(prepared, prepared, 0, 255, ThresholdTypes.Binary | ThresholdTypes.Otsu);
 
+            // 轻微放大（仅区域裁切时：全帧放大 2880px 会超过 OcrEngine 2600px 上限）
+            if (prepared.Width <= 1700 && prepared.Height <= 1700)
+                Cv2.Resize(prepared, prepared, new Size(0, 0), 1.5, 1.5, InterpolationFlags.Linear);
+
             using var bgra = new Mat();
             Cv2.CvtColor(prepared, bgra, ColorConversionCodes.GRAY2BGRA);
             Cv2.ImEncode(".bmp", bgra, out byte[] bmp);

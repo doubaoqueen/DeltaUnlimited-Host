@@ -27,6 +27,10 @@ public sealed class RuntimeConfig
     [JsonPropertyName("design_height")]
     public int DesignHeight { get; set; } = 1080;
 
+    /// <summary>OCR 引擎选择：windows（默认）/ paddle（门控失败后接入）。</summary>
+    [JsonPropertyName("ocr_engine")]
+    public string OcrEngine { get; set; } = "windows";
+
     /// <summary>拟人化参数（缺失时使用默认值）。</summary>
     [JsonPropertyName("humanizer")]
     public HumanizerConfig? Humanizer { get; set; }

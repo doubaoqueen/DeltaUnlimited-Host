@@ -14,9 +14,11 @@ public class DataStoreTests
         var table = CreateStore().LoadElements();
         Assert.True(table.Elements.ContainsKey("depart_button"));
         var def = table.Elements["depart_button"];
-        Assert.Equal("coord", def.Strategy);
-        Assert.Equal(1738, def.Params.X);
+        Assert.Equal("ocr", def.Strategy); // P0 起按钮以 OCR 为主定位
+        Assert.Contains("出发", def.Params.Keywords!);
+        Assert.Equal(1738, def.Params.X); // 坐标兜底仍在
         Assert.Equal(966, def.Params.Y);
+        Assert.Equal("zone_bottom_right", def.Params.RegionName);
     }
 
     [Fact]

@@ -9,7 +9,7 @@ namespace DeltaUnlimited.Vision.Ocr;
 /// ADR #11：宽松候选永远不作为点击依据。</summary>
 public static class OcrTextMatcher
 {
-    public sealed record OcrMatch(bool StrictHit, bool CandidateHit, string MatchedText, int X, int Y, int W, int H);
+    public sealed record OcrMatch(bool StrictHit, bool CandidateHit, string MatchedText, int X, int Y, int W, int H, string? CandidateHint = null);
 
     private static string Norm(string s)
     {
@@ -65,10 +65,20 @@ public static class OcrTextMatcher
             }
         }
 
-        // 3) 候选层：全帧文本出现任一字符（不裁决）
+        // 3) 候选层：全帧文本出现任一字符（不裁决），附命中词提示（诊断/报警用）
         string all = string.Concat(words.Select(w => Norm(w.Text)));
         bool candidate = kw.Any(c => all.Contains(c));
-        return new OcrMatch(false, candidate, kw, 0, 0, 0, 0);
+        string? hint = null;
+        if (candidate)
+        {
+            foreach (var c in kw)
+            {
+                if (!all.Contains(c)) continue;
+                var w = words.FirstOrDefault(x => Norm(x.Text).Contains(c));
+                if (w is not null) { hint = w.Text; break; }
+            }
+        }
+        return new OcrMatch(false, candidate, kw, 0, 0, 0, 0, hint);
     }
 
     /// <summary>按垂直重叠分行：重叠 ≥ 较高词高度的一半才视为同一行（防止密集多行 HUD 串行）。</summary>

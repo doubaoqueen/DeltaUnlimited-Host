@@ -15,12 +15,12 @@ Logger.Init(root);
 var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
 Console.WriteLine($"DeltaUnlimited v{version}（开发期 CLI）");
 
-// OCR 引擎初始化（Windows.Media.Ocr 先行，Paddle 后补）
-Ocr.Initialize();
-
-// 拟人化参数注入（runtime.json 可覆盖）
+// 先读运行时配置（OCR 引擎选择、拟人化参数注入）
 var runtime = store.LoadRuntime();
 InputService.Configure(runtime.Humanizer ?? new HumanizerConfig());
+
+// OCR 引擎初始化（runtime.json 的 ocr_engine 可切换：windows 主 / paddle 待门控失败后接入）
+Ocr.Initialize(runtime.OcrEngine);
 
 // #12: 转向未标定警告
 if (runtime.PxPer90Deg <= 0)

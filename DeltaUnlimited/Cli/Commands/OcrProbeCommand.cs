@@ -31,7 +31,10 @@ public static class OcrProbeCommand
         foreach (var kw in keywords)
         {
             var m = OcrTextMatcher.Match(words, kw);
-            Console.WriteLine($"关键词 “{kw}”: 严格={(m.StrictHit ? "命中 ✅" : "未命中")} 候选={(m.CandidateHit ? "出现" : "无")}{(m.StrictHit ? $" @ ({m.X},{m.Y}) {m.W}x{m.H}" : "")}");
+            string hint = m.CandidateHit && !string.IsNullOrEmpty(m.CandidateHint)
+                ? $"  混淆提示: 可能与 “{m.CandidateHint}” 混淆，建议人工确认"
+                : "";
+            Console.WriteLine($"关键词 “{kw}”: 严格={(m.StrictHit ? "命中 ✅" : "未命中")} 候选={(m.CandidateHit ? "出现" : "无")}{(m.StrictHit ? $" @ ({m.X},{m.Y}) {m.W}x{m.H}" : "")}{hint}");
         }
     }
 }
