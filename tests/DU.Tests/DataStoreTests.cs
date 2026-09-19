@@ -43,6 +43,18 @@ public class DataStoreTests
     }
 
     [Fact]
+    public void Screens_PlazaReady_RequiresAllKeywords_ToAvoidLoadoutCrossTalk()
+    {
+        // 防串台回归：'配装' 会严格命中配装界面的 '确认配装' 按钮，
+        // 所以广场准备状态必须 require_all 同时要求 '出发' 在场，否则会在配装界面误判为广场。
+        var table = CreateStore().LoadScreens();
+        var marker = table.Screens["plaza_ready"].Markers.First(m => m.Type == "ocr");
+        Assert.True(marker.RequireAll == true, "plaza_ready 的 ocr 标记必须 require_all=true");
+        Assert.Contains("配装", marker.Keywords!);
+        Assert.Contains("出发", marker.Keywords!);
+    }
+
+    [Fact]
     public void Zones_ContainsBottomRight()
     {
         var zones = CreateStore().LoadZones();

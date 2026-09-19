@@ -32,7 +32,9 @@ public sealed class ScreenDef
 }
 
 /// <summary>识别标记：type = template / ocr（后续扩展 color）。
-/// region = [x, y, w, h] 可选，只在该区域搜索；region_name = 引用 data/zones.json 的具名区。</summary>
+/// region = [x, y, w, h] 可选，只在该区域搜索；region_name = 引用 data/zones.json 的具名区。
+/// require_all：ocr 标记默认任一关键词命中即可；设为 true 时区域内所有关键词都必须命中（防止关键词子串串台，
+/// 如 "配装" 会命中配装界面的 "确认配装" 按钮，必须搭配 "出发" 一起要求才能锁定广场准备状态）。</summary>
 public sealed class ScreenMarker
 {
     [JsonPropertyName("type")]
@@ -46,6 +48,9 @@ public sealed class ScreenMarker
 
     [JsonPropertyName("keywords")]
     public List<string>? Keywords { get; set; }
+
+    [JsonPropertyName("require_all")]
+    public bool? RequireAll { get; set; }
 
     [JsonPropertyName("region")]
     public List<int>? Region { get; set; }

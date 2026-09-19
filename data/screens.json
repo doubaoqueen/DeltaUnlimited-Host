@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "说明": "界面识别表：任一标记命中即判定为该界面（主标记 + 兜底标记分层）。markers 支持 template（纯图标/兜底）与 ocr（关键词严格命中，主力）；region_name 引用 data/zones.json 具名区。",
+  "说明": "界面识别表：任一标记命中即判定为该界面（主标记 + 兜底标记分层）。markers 支持 template（纯图标/兜底）与 ocr（关键词严格命中，主力）；ocr 标记的 require_all=true 表示区域内所有关键词都必须命中（防串台：如 '配装' 会命中配装界面的 '确认配装'，必须连同 '出发' 一起要求）。region_name 引用 data/zones.json 具名区。",
   "screens": {
     "lobby": {
       "note": "特勤处（按 Tab 前，底部“Tab 开始游戏”）",
@@ -18,9 +18,9 @@
       "actions": ["点击 行前备战 → 地图选择"]
     },
     "plaza_ready": {
-      "note": "备战界面-常态（右下“配装|出发”）",
+      "note": "备战界面-常态（右下“配装|出发”）；require_all 防串台：配装界面也有'配装'字样（'确认配装'），必须'出发'同时在场才认",
       "markers": [
-        { "type": "ocr", "keywords": ["配装", "出发"], "region_name": "zone_bottom_right" },
+        { "type": "ocr", "keywords": ["配装", "出发"], "require_all": true, "region_name": "zone_bottom_right" },
         { "type": "template", "template": "assets/templates/depart_button.png", "threshold": 0.85 }
       ],
       "actions": ["点击 出发 → 匹配"]

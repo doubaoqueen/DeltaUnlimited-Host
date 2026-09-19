@@ -38,6 +38,15 @@ public class OcrTextMatcherTests
     }
 
     [Fact]
+    public void Strict_SubstringWithinWord_CrossTalkTrap()
+    {
+        // 串台陷阱（require_all 的存在理由）：关键词“配装”会严格命中配装界面的“确认配装”按钮，
+        // 因此界面标记若只用“配装”，会在配装界面误判为广场 → 必须连“出发”一起要求（见 screens.json require_all）。
+        var m = OcrTextMatcher.Match(new[] { new OcrWord("确认配装", 1600, 950, 120, 30) }, "配装");
+        Assert.True(m.StrictHit);
+    }
+
+    [Fact]
     public void NoHit()
     {
         var m = OcrTextMatcher.Match(new[] { new OcrWord("配装", 0, 0, 60, 30) }, "出发");

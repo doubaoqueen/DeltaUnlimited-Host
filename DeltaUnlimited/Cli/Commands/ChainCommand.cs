@@ -130,16 +130,17 @@ public static class ChainCommand
                 {
                     using var frame = CaptureService.CaptureWindowMat(winKeyword);
                     using var norm = FrameTools.Normalize(frame, runtime.DesignWidth, runtime.DesignHeight);
-                    var scan = ScreenDetector.Scan(norm, screens, repoRoot);
-                    var hit = scan.FirstOrDefault(c => c.Matched);
+                    var guess = ScreenDetector.Detect(norm, screens, repoRoot);
                     string msg;
-                    if (hit is not null)
+                    if (guess is not null)
                     {
-                        var actions = screens.Screens[hit.Name].Actions;
-                        msg = $"识别界面: {hit.Name}（置信度 {hit.Confidence:F3}）可用操作: {string.Join(" / ", actions)}";
+                        msg = $"识别界面: {guess.Name}（置信度 {guess.Confidence:F3}）可用操作: {string.Join(" / ", guess.Actions)}";
+                        if (guess.Alternatives.Count > 0)
+                            msg += $"；⚠️ 同时命中: {string.Join(", ", guess.Alternatives)}（已按置信度取优，若误判请收紧该界面关键词）";
                     }
                     else
                     {
+                        var scan = ScreenDetector.Scan(norm, screens, repoRoot);
                         var top = string.Join("  ", scan.Take(3).Select(c => $"{c.Name}={c.Confidence:F2}"));
                         msg = $"识别界面: 未知（最接近: {top}）";
                         var uncfg = ScreenDetector.UnconfiguredScreens(screens);
@@ -158,8 +159,9 @@ public static class ChainCommand
                     using var norm = FrameTools.Normalize(frame, runtime.DesignWidth, runtime.DesignHeight);
                     var guess = ScreenDetector.Detect(norm, screens, repoRoot);
                     string got = guess?.Name ?? "unknown";
-                    Console.WriteLine($"  👁 界面判断: 当前 {got} / 期望 {want} → {(got == want ? "命中 ✅" : "未命中 ❌")}");
-                    Logger.Info($"界面判断: 当前 {got} / 期望 {want} {(got == want ? "命中" : "未命中")}");
+                    string amb = guess is { Alternatives.Count: > 0 } ? $"（同时命中: {string.Join(", ", guess.Alternatives)}）" : "";
+                    Console.WriteLine($"  👁 界面判断: 当前 {got}{amb} / 期望 {want} → {(got == want ? "命中 ✅" : "未命中 ❌")}");
+                    Logger.Info($"界面判断: 当前 {got}{amb} / 期望 {want} {(got == want ? "命中" : "未命中")}");
                     if (got == want && !string.IsNullOrEmpty(s.JumpTo))
                     {
                         Console.WriteLine($"  ↪ 跳转到 “{s.JumpTo}”");
