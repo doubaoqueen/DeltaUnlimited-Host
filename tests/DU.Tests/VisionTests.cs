@@ -1,5 +1,6 @@
 using DeltaUnlimited.Data;
 using DeltaUnlimited.Vision;
+using DeltaUnlimited.Vision.Ocr;
 using OpenCvSharp;
 using Xunit;
 
@@ -83,5 +84,50 @@ public class VisionTests
         var guess = ScreenDetector.Detect(frame, table, root);
         Assert.NotNull(guess);
         Assert.Equal("plaza_ready", guess!.Name);
+    }
+
+    [Fact]
+    public void Ocr_RegionPath_ReturnsUnscaledCoordinates()
+    {
+        // 回归：区域路径 1.5x 放大后，OCR 框必须除回原坐标系——
+        // 否则 ElementClicker 会把点击坐标放大 1.5 倍点偏（“出发”≈(1739,966) 会偏到 ≈(1958,1009)）。
+        try { Ocr.Initialize(); } catch { return; } // 测试宿主不可用 OCR 时跳过
+        if (Ocr.Engine is null || !Ocr.Engine.IsAvailable) return;
+
+        string? fixture = FixturePath("plaza_ready.jpg");
+        if (fixture is null) return;
+
+        using var frame = Cv2.ImRead(fixture, ImreadModes.Color);
+        var zones = new DataStore(RepoRoot).LoadZones();
+        var region = zones.Zones["zone_bottom_right"].ToArray();
+
+        var found = Ocr.FindStrict(frame, region, new[] { "出发" });
+        Assert.NotNull(found);
+        Assert.True(found!.Found, "区域路径应严格命中“出发”");
+        Assert.InRange(found.CenterX, 1680, 1780); // 设计中心 1739（放大未除回会 ≈1958）
+        Assert.InRange(found.CenterY, 930, 1000);  // 设计中心 966
+    }
+
+    /// <summary>三态门控回归（2026-09 实测截图）：无目标/匹配中/干员选择各自唯一命中，且不串台。
+    /// fixture 用无损 PNG（JPEG 压缩会让小字误读，如“战”→“摅”）。</summary>
+    [Theory]
+    [InlineData("plaza_first.png", "plaza_first")]
+    [InlineData("matching.png", "matching")]
+    [InlineData("char_select.png", "char_select")]
+    public void ScreenDetector_DetectsStateUniquely_OnStateFixtures(string fixtureName, string expected)
+    {
+        try { Ocr.Initialize(); } catch { return; } // 测试宿主不可用 OCR 时跳过
+        if (Ocr.Engine is null || !Ocr.Engine.IsAvailable) return;
+
+        string? fixture = FixturePath(fixtureName);
+        if (fixture is null) return;
+
+        using var frame = Cv2.ImRead(fixture, ImreadModes.Color);
+        var table = new DataStore(RepoRoot).LoadScreens();
+
+        var guess = ScreenDetector.Detect(frame, table, RepoRoot);
+        Assert.NotNull(guess);
+        Assert.Equal(expected, guess!.Name);
+        Assert.Empty(guess.Alternatives); // 唯一命中：多界面同时命中=串台，必须告警整改
     }
 }

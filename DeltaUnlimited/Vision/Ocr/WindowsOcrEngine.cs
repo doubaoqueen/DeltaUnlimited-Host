@@ -71,8 +71,13 @@ public sealed class WindowsOcrEngine : IOcrEngine
             Cv2.Threshold(prepared, prepared, 0, 255, ThresholdTypes.Binary | ThresholdTypes.Otsu);
 
             // 轻微放大（仅区域裁切时：全帧放大 2880px 会超过 OcrEngine 2600px 上限）
+            // 放大后 OCR 返回的框是放大坐标系的，必须除回 scale 才能映射回原图（否则点击/区域判定偏移 1.5x）。
+            double scale = 1.0;
             if (prepared.Width <= 1700 && prepared.Height <= 1700)
+            {
                 Cv2.Resize(prepared, prepared, new Size(0, 0), 1.5, 1.5, InterpolationFlags.Linear);
+                scale = 1.5;
+            }
 
             using var bgra = new Mat();
             Cv2.CvtColor(prepared, bgra, ColorConversionCodes.GRAY2BGRA);
@@ -97,7 +102,9 @@ public sealed class WindowsOcrEngine : IOcrEngine
                 foreach (var w in line.Words)
                 {
                     var r = w.BoundingRect;
-                    words.Add(new OcrWord(w.Text, (int)(offX + r.X), (int)(offY + r.Y), (int)r.Width, (int)r.Height));
+                    words.Add(new OcrWord(w.Text,
+                        (int)(offX + r.X / scale), (int)(offY + r.Y / scale),
+                        (int)(r.Width / scale), (int)(r.Height / scale)));
                 }
             }
             return words;

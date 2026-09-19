@@ -55,11 +55,26 @@ public class DataStoreTests
     }
 
     [Fact]
+    public void Screens_MatchingAndCharSelect_UseCurrentButtonTexts()
+    {
+        // 实测校准（2026-09 游戏内 OCR）：匹配中按钮是“取消行动”（非旧文档“取消匹配”）；
+        // 干员选择界面是“请选择干员”标题 + “当前出战”标签（非旧文档“当前干员”）。
+        var table = CreateStore().LoadScreens();
+        var matching = table.Screens["matching"].Markers.First(m => m.Type == "ocr");
+        Assert.Contains("取消行动", matching.Keywords!);
+        var charSelect = table.Screens["char_select"];
+        Assert.Contains(charSelect.Markers, m => m.Keywords!.Contains("当前出战"));
+        Assert.Contains(charSelect.Markers, m => m.Keywords!.Contains("请选择干员"));
+    }
+
+    [Fact]
     public void Zones_ContainsBottomRight()
     {
         var zones = CreateStore().LoadZones();
         Assert.True(zones.Zones.ContainsKey("zone_bottom_right"));
         Assert.True(zones.Zones.ContainsKey("zone_center_bottom"));
+        Assert.True(zones.Zones.ContainsKey("zone_bottom_left"));
+        Assert.True(zones.Zones.ContainsKey("zone_top"));
     }
 
     [Fact]

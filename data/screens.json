@@ -26,7 +26,8 @@
       "actions": ["点击 出发 → 匹配"]
     },
     "map_select": {
-      "note": "地图选择界面",
+      "enabled": false,
+      "note": "地图选择界面。⚠️ 实测：顶栏“零号大坝”在广场/匹配界面也严格命中（串台），已禁用。待拿到地图选择实截图后，改为 require_all 绑定“开始行动”等按钮文字再启用",
       "markers": [
         { "type": "ocr", "keywords": ["零号大坝"] }
       ],
@@ -40,16 +41,17 @@
       "actions": ["点击 确认配装"]
     },
     "matching": {
-      "note": "匹配中（右下“取消匹配”）",
+      "note": "匹配中（右下按钮实际文字为“取消行动”，旧文档误作“取消匹配”；实测 OCR 拆字“取/消/行/动”行内可拼）",
       "markers": [
-        { "type": "ocr", "keywords": ["取消匹配"], "region_name": "zone_bottom_right" }
+        { "type": "ocr", "keywords": ["取消行动"], "region_name": "zone_bottom_right" }
       ],
       "actions": ["等待匹配结束"]
     },
     "char_select": {
-      "note": "干员选择界面（干员下方“当前干员”）",
+      "note": "干员选择界面（顶部标题“请选择干员”；左下选中干员标签“当前出战”，旧文档误作“当前干员”）。实测：两词全帧 OCR 均可严格命中且不与其他界面串台；区域裁切反而丢字（战/请/择），故不设 region",
       "markers": [
-        { "type": "ocr", "keywords": ["当前干员"] }
+        { "type": "ocr", "keywords": ["请选择干员"] },
+        { "type": "ocr", "keywords": ["当前出战"] }
       ],
       "actions": ["进场链路终点"]
     }
