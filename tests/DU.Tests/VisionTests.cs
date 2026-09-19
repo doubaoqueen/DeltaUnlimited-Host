@@ -124,6 +124,21 @@ public class VisionTests
         Assert.InRange(r.CenterY, 200, 230); // 设计中心 215
     }
 
+    [Fact]
+    public void TemplateMatcher_ZerodamTitle_NotOn_MapSelectFixture()
+    {
+        // 防串台：零号大坝卡片标题只在地图池出现；已选地图部署面板上不应命中，
+        // 否则地图池的模板标记会与 map_select 串台（若将来发现真机误报，给模板标记加区域限制）。
+        string root = RepoRoot;
+        string? fixture = FixturePath("map_select.png");
+        string tpl = Path.Combine(root, "assets", "templates", "zerodam_title.png");
+        if (fixture is null || !File.Exists(tpl)) return;
+
+        using var frame = Cv2.ImRead(fixture, ImreadModes.Color);
+        var r = TemplateMatcher.Match(frame, tpl, 0.85);
+        Assert.False(r.Found, $"置信度 {r.Confidence:F3} —— 零号大坝标题模板在部署面板上误命中");
+    }
+
     /// <summary>多态门控回归（2026-09 实测截图）：各界面唯一命中且不串台。
     /// fixture 用无损 PNG（JPEG 压缩会让小字误读，如“战”→“摅”）。</summary>
     [Theory]
@@ -131,6 +146,7 @@ public class VisionTests
     [InlineData("matching.png", "matching")]
     [InlineData("char_select.png", "char_select")]
     [InlineData("map_pool.png", "map_pool")]
+    [InlineData("map_pool_live.png", "map_pool")]
     [InlineData("map_select.png", "map_select")]
     [InlineData("loadout.png", "loadout")]
     [InlineData("deploy_reminder.png", "deploy_reminder")]
