@@ -96,11 +96,25 @@ public class DataStoreTests
     public void Chain_EnterMatchFirst_HasAutomatedSteps()
     {
         var chain = CreateStore().LoadChain("enter_match_first.json");
+        Assert.Equal("detect", chain.Steps[0].Op); // v2：状态驱动开头，启动即识别
+        // 特勤处等待时不得先卡人工暂停：首个 pause 必须出现在第一次按键(Tab)之后
+        int firstKey = chain.Steps.FindIndex(s => s.Op == "key");
+        int firstPause = chain.Steps.FindIndex(s => s.Op == "pause");
+        Assert.True(firstKey >= 0 && firstKey < firstPause, "首个 pause 不得出现在首次 Tab 之前");
         Assert.Contains(chain.Steps, s => s.Op == "click_element" && s.Element == "start_action_button");
         Assert.Contains(chain.Steps, s => s.Op == "click_element" && s.Element == "confirm_loadout_button");
         Assert.Contains(chain.Steps, s => s.Op == "click_element" && s.Element == "continue_anyway_button");
         Assert.Contains(chain.Steps, s => s.Op == "if_screen" && s.Screen == "map_pool");
         Assert.Contains(chain.Steps, s => s.Op == "wait_screen" && s.Screen == "char_select");
+    }
+
+    [Fact]
+    public void LoadoutPresets_Loads_EmptyStub()
+    {
+        // 自动配装预留：schema 已建、presets 为空即可加载（插入点见 docs/配装设计.md）
+        var table = CreateStore().LoadLoadoutPresets();
+        Assert.Equal(1, table.SchemaVersion);
+        Assert.NotNull(table.Presets);
     }
 
     [Fact]

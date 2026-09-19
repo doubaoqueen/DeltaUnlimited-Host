@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "说明": "自动配装预设表（预留，未启用）：等待攻略/建议确定方案后填充。草案字段：presets[] 每套含 name（如“零成本跑刀”）、budget_cap（预算上限哈夫币）、slots[] 槽位（主武器/副武器/护甲/头盔/背包/弹匣/药品/投掷物等），每个槽位含 item（装备名）、strategy（预设装备名/模板/ocr，预留）、required（是否必备）、note。插入点：workflows/enter_match_first.json 中“确认配装”点击前（详见 docs/配装设计.md）。",
+  "presets": []
+}

@@ -264,6 +264,8 @@ public static class ChainCommand
                             errors.Add($"步骤{idx}: 元素 “{s.Element}” 用 ocr 策略但缺少 keywords");
                         else if (def.Strategy == "coord" && (def.Params.X is null || def.Params.Y is null))
                             errors.Add($"步骤{idx}: 元素 “{s.Element}” 用 coord 策略但缺少 x/y");
+                        else if (def.Strategy == "template" && !File.Exists(Path.Combine(repoRoot, def.Params.Template ?? "")))
+                            errors.Add($"步骤{idx}: 元素 “{s.Element}” 模板文件不存在: {def.Params.Template}");
                     }
                     break;
 

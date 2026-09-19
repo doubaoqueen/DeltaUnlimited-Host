@@ -3,7 +3,7 @@
   "说明": "界面识别表：任一标记命中即判定为该界面（主标记 + 兜底标记分层）。markers 支持 template（纯图标/兜底）与 ocr（关键词严格命中，主力）；ocr 标记的 require_all=true 表示区域内所有关键词都必须命中（防串台：如 '配装' 会命中配装界面的 '确认配装'，必须连同 '出发' 一起要求）。region_name 引用 data/zones.json 具名区。",
   "screens": {
     "lobby": {
-      "note": "特勤处（按 Tab 前，底部“Tab 开始游戏”）",
+      "note": "特勤处（按 Tab 前，底部“Tab 开始游戏”）。⚠️ 未实测：现有 hall.jpg fixture 为旧版 UI 读不出该文字；链路 v2 不依赖本界面（未知→Tab→再识别），等拿到当前版本特勤处截图后校准",
       "markers": [
         { "type": "ocr", "keywords": ["开始游戏", "Tab 开始游戏"], "region_name": "zone_center_bottom" }
       ],
