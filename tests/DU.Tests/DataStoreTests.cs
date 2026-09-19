@@ -68,6 +68,42 @@ public class DataStoreTests
     }
 
     [Fact]
+    public void Screens_MapPoolMapSelectLoadoutReminder_PresentAndEnabled()
+    {
+        // 初进场链路 v1 依赖的四个界面必须存在且启用（map_select 曾被禁用，现已按实测重新启用）
+        var table = CreateStore().LoadScreens();
+        foreach (var name in new[] { "map_pool", "map_select", "loadout", "deploy_reminder" })
+        {
+            Assert.True(table.Screens.ContainsKey(name), $"缺少界面 {name}");
+            Assert.True(table.Screens[name].Enabled != false, $"界面 {name} 被禁用");
+            Assert.NotEmpty(table.Screens[name].Markers);
+        }
+    }
+
+    [Fact]
+    public void Elements_EntryChainButtons_Present()
+    {
+        var table = CreateStore().LoadElements();
+        foreach (var name in new[] { "start_action_button", "confirm_loadout_button", "continue_anyway_button" })
+        {
+            Assert.True(table.Elements.ContainsKey(name), $"缺少元素 {name}");
+            Assert.Equal("ocr", table.Elements[name].Strategy);
+            Assert.NotEmpty(table.Elements[name].Params.Keywords!);
+        }
+    }
+
+    [Fact]
+    public void Chain_EnterMatchFirst_HasAutomatedSteps()
+    {
+        var chain = CreateStore().LoadChain("enter_match_first.json");
+        Assert.Contains(chain.Steps, s => s.Op == "click_element" && s.Element == "start_action_button");
+        Assert.Contains(chain.Steps, s => s.Op == "click_element" && s.Element == "confirm_loadout_button");
+        Assert.Contains(chain.Steps, s => s.Op == "click_element" && s.Element == "continue_anyway_button");
+        Assert.Contains(chain.Steps, s => s.Op == "if_screen" && s.Screen == "map_pool");
+        Assert.Contains(chain.Steps, s => s.Op == "wait_screen" && s.Screen == "char_select");
+    }
+
+    [Fact]
     public void Zones_ContainsBottomRight()
     {
         var zones = CreateStore().LoadZones();
@@ -75,6 +111,8 @@ public class DataStoreTests
         Assert.True(zones.Zones.ContainsKey("zone_center_bottom"));
         Assert.True(zones.Zones.ContainsKey("zone_bottom_left"));
         Assert.True(zones.Zones.ContainsKey("zone_top"));
+        Assert.True(zones.Zones.ContainsKey("zone_right_mid"));
+        Assert.True(zones.Zones.ContainsKey("zone_left_mid"));
     }
 
     [Fact]

@@ -5,6 +5,8 @@
     "zone_bottom_right": [1300, 880, 620, 200],
     "zone_center_bottom": [500, 850, 920, 230],
     "zone_bottom_left": [0, 850, 700, 230],
-    "zone_top": [0, 0, 1920, 300]
+    "zone_top": [0, 0, 1920, 300],
+    "zone_right_mid": [1200, 540, 720, 180],
+    "zone_left_mid": [0, 350, 450, 200]
   }
 }

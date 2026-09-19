@@ -26,6 +26,21 @@
       "note": "出发按钮（ocr 关键词主定位 + 坐标兜底）",
       "strategy": "ocr",
       "params": { "keywords": ["出发"], "region_name": "zone_bottom_right", "x": 1738, "y": 966 }
+    },
+    "start_action_button": {
+      "note": "开始行动按钮（已选地图部署面板右下；区域实测命中 @(1614,632)）",
+      "strategy": "ocr",
+      "params": { "keywords": ["开始行动"], "region_name": "zone_right_mid", "x": 1651, "y": 641 }
+    },
+    "confirm_loadout_button": {
+      "note": "确认配装按钮（配装界面右下；区域实测命中 @(1647,944)）",
+      "strategy": "ocr",
+      "params": { "keywords": ["确认配装"], "region_name": "zone_bottom_right", "x": 1684, "y": 955 }
+    },
+    "continue_anyway_button": {
+      "note": "仍要继续按钮（入局提醒弹窗；全帧实测命中 @(922,694)）",
+      "strategy": "ocr",
+      "params": { "keywords": ["仍要继续"], "x": 959, "y": 703 }
     }
   }
 }

@@ -108,12 +108,16 @@ public class VisionTests
         Assert.InRange(found.CenterY, 930, 1000);  // 设计中心 966
     }
 
-    /// <summary>三态门控回归（2026-09 实测截图）：无目标/匹配中/干员选择各自唯一命中，且不串台。
+    /// <summary>多态门控回归（2026-09 实测截图）：各界面唯一命中且不串台。
     /// fixture 用无损 PNG（JPEG 压缩会让小字误读，如“战”→“摅”）。</summary>
     [Theory]
     [InlineData("plaza_first.png", "plaza_first")]
     [InlineData("matching.png", "matching")]
     [InlineData("char_select.png", "char_select")]
+    [InlineData("map_pool.png", "map_pool")]
+    [InlineData("map_select.png", "map_select")]
+    [InlineData("loadout.png", "loadout")]
+    [InlineData("deploy_reminder.png", "deploy_reminder")]
     public void ScreenDetector_DetectsStateUniquely_OnStateFixtures(string fixtureName, string expected)
     {
         try { Ocr.Initialize(); } catch { return; } // 测试宿主不可用 OCR 时跳过
