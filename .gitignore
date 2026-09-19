@@ -364,6 +364,7 @@ FodyWeavers.xsd
 # 视觉冒烟调试产物
 screenshots/annotated/
 screenshots/captured/
+screenshots/unknown/
 
 tests/fixtures/
 

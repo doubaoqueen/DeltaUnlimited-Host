@@ -4,6 +4,7 @@ using DeltaUnlimited.Data;
 using DeltaUnlimited.Input;
 using DeltaUnlimited.Overlay;
 using DeltaUnlimited.Vision;
+using DeltaUnlimited.Vision.Ocr;
 using OpenCvSharp;
 
 namespace DeltaUnlimited.Cli.Commands;
@@ -167,6 +168,48 @@ public static class ChainCommand
                         Console.WriteLine($"  ↪ 跳转到 “{s.JumpTo}”");
                         i = FindStep(s.JumpTo);
                         continue;
+                    }
+                    break;
+                }
+
+                case "mark_unknown":
+                {
+                    // 未知界面标记：截图 + 界面候选 + 全帧 OCR 词表存盘，供后续补标记（screenshots/unknown/）
+                    string stamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                    string dir = Path.Combine(repoRoot, "screenshots", "unknown");
+                    Directory.CreateDirectory(dir);
+                    string png = Path.Combine(dir, $"unknown_{stamp}.png");
+                    string txt = Path.Combine(dir, $"unknown_{stamp}.txt");
+
+                    using var frame = CaptureService.CaptureWindowMat(winKeyword);
+                    using var norm = FrameTools.Normalize(frame, runtime.DesignWidth, runtime.DesignHeight);
+                    Cv2.ImWrite(png, norm);
+
+                    var scan = ScreenDetector.Scan(norm, screens, repoRoot);
+                    var lines = new List<string>
+                    {
+                        $"时间: {DateTime.Now:yyyy-MM-dd HH:mm:ss}",
+                        $"链路: {chainFile} 步骤 {i + 1}",
+                        $"窗口: {winKeyword}  设计分辨率: {runtime.DesignWidth}x{runtime.DesignHeight}",
+                        "",
+                        "界面候选（按置信度，✓=命中）:"
+                    };
+                    foreach (var c in scan.Take(5))
+                        lines.Add($"  {c.Name}: 置信度 {c.Confidence:F3}  命中标记 {c.MarkerHits}  {(c.Matched ? "✓" : "")}");
+                    lines.Add("");
+                    lines.Add("全帧 OCR 词表（供后续加标记用）:");
+                    if (Ocr.Engine is { IsAvailable: true })
+                        foreach (var ow in Ocr.Engine.Recognize(norm, null))
+                            lines.Add($"  “{ow.Text}” @ ({ow.X},{ow.Y}) {ow.W}x{ow.H}");
+                    File.WriteAllLines(txt, lines);
+
+                    Logger.Warn($"未知界面已标记: {png}（词表 {txt}）");
+                    Console.WriteLine($"  🏷 未知界面已标记: {png}");
+                    Console.WriteLine($"     候选与词表: {txt}");
+                    if (!auto)
+                    {
+                        Console.WriteLine($"  ⏸ {s.Message ?? "人工处理后回车继续（部分界面需长按空格跳过）"} —— 回车继续");
+                        Console.ReadLine();
                     }
                     break;
                 }

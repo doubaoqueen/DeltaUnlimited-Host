@@ -93,6 +93,18 @@ public class DataStoreTests
     }
 
     [Fact]
+    public void Elements_Contains_ZerodamCard_WithTemplateFile()
+    {
+        var table = CreateStore().LoadElements();
+        Assert.True(table.Elements.ContainsKey("zerodam_card"));
+        var def = table.Elements["zerodam_card"];
+        Assert.Equal("template", def.Strategy);
+        Assert.NotNull(def.Params.Template);
+        Assert.True(File.Exists(Path.Combine(DataStore.FindRoot(), def.Params.Template!)),
+            $"模板文件缺失: {def.Params.Template}");
+    }
+
+    [Fact]
     public void Chain_EnterMatchFirst_HasAutomatedSteps()
     {
         var chain = CreateStore().LoadChain("enter_match_first.json");
@@ -102,9 +114,11 @@ public class DataStoreTests
         int firstPause = chain.Steps.FindIndex(s => s.Op == "pause");
         Assert.True(firstKey >= 0 && firstKey < firstPause, "首个 pause 不得出现在首次 Tab 之前");
         Assert.Contains(chain.Steps, s => s.Op == "click_element" && s.Element == "start_action_button");
+        Assert.Contains(chain.Steps, s => s.Op == "click_element" && s.Element == "zerodam_card");
         Assert.Contains(chain.Steps, s => s.Op == "click_element" && s.Element == "confirm_loadout_button");
         Assert.Contains(chain.Steps, s => s.Op == "click_element" && s.Element == "continue_anyway_button");
         Assert.Contains(chain.Steps, s => s.Op == "if_screen" && s.Screen == "map_pool");
+        Assert.Contains(chain.Steps, s => s.Op == "mark_unknown");
         Assert.Contains(chain.Steps, s => s.Op == "wait_screen" && s.Screen == "char_select");
     }
 

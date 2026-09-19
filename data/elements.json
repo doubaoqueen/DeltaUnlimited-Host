@@ -41,6 +41,11 @@
       "note": "仍要继续按钮（入局提醒弹窗；全帧实测命中 @(922,694)）",
       "strategy": "ocr",
       "params": { "keywords": ["仍要继续"], "x": 959, "y": 703 }
+    },
+    "zerodam_card": {
+      "note": "地图池“零号大坝”卡片标题（美术字 OCR 不可读，模板策略；实测矩形 (770,200,113,30)，中心 (826,215)）",
+      "strategy": "template",
+      "params": { "template": "assets/templates/zerodam_title.png", "threshold": 0.85, "x": 826, "y": 215 }
     }
   }
 }

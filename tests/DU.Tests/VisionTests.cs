@@ -108,6 +108,22 @@ public class VisionTests
         Assert.InRange(found.CenterY, 930, 1000);  // 设计中心 966
     }
 
+    [Fact]
+    public void TemplateMatcher_FindsZerodamTitle_InMapPoolFixture()
+    {
+        // 自匹配回归：模板从地图池截图 (770,200,113,30) 裁出，应回到中心 (826,215)
+        string root = RepoRoot;
+        string? fixture = FixturePath("map_pool.png");
+        string tpl = Path.Combine(root, "assets", "templates", "zerodam_title.png");
+        if (fixture is null || !File.Exists(tpl)) return;
+
+        using var frame = Cv2.ImRead(fixture, ImreadModes.Color);
+        var r = TemplateMatcher.Match(frame, tpl, 0.9);
+        Assert.True(r.Found);
+        Assert.InRange(r.CenterX, 796, 856); // 设计中心 826
+        Assert.InRange(r.CenterY, 200, 230); // 设计中心 215
+    }
+
     /// <summary>多态门控回归（2026-09 实测截图）：各界面唯一命中且不串台。
     /// fixture 用无损 PNG（JPEG 压缩会让小字误读，如“战”→“摅”）。</summary>
     [Theory]
