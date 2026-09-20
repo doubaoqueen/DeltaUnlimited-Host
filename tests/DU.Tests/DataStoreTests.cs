@@ -116,10 +116,10 @@ public class DataStoreTests
     }
 
     [Fact]
-    public void Chain_EnterMatchFirst_HasAutomatedSteps()
+    public void Chain_EnterMatch_HasAutomatedSteps()
     {
-        var chain = CreateStore().LoadChain("enter_match_first.json");
-        Assert.Equal("detect", chain.Steps[0].Op); // v2：状态驱动开头，启动即识别
+        var chain = CreateStore().LoadChain("enter_match.json");
+        Assert.Equal("detect", chain.Steps[0].Op); // v4：状态驱动开头，启动即识别
         // 特勤处等待时不得先卡人工暂停：首个 pause 必须出现在第一次按键(Tab)之后
         int firstKey = chain.Steps.FindIndex(s => s.Op == "key");
         int firstPause = chain.Steps.FindIndex(s => s.Op == "pause");

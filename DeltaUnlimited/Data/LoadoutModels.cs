@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace DeltaUnlimited.Data;
 
 /// <summary>自动配装预设表 data/loadout_preset.json（预留，未启用）。
-/// 等待攻略/建议确定方案后填充：workflows/enter_match_first.json 中“确认配装”点击前为插入点。</summary>
+/// 等待攻略/建议确定方案后填充：workflows/enter_match.json 中“确认配装”点击前为插入点。</summary>
 public sealed class LoadoutPresetTable
 {
     [JsonPropertyName("schema_version")]
