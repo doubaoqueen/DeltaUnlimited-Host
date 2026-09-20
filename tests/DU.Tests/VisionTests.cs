@@ -152,6 +152,7 @@ public class VisionTests
     [InlineData("deploy_reminder.png", "deploy_reminder")]
     [InlineData("space_continue.png", "space_continue")]
     [InlineData("mode_select.png", "mode_select")]
+    [InlineData("mode_select_launch.png", "mode_select")]
     public void ScreenDetector_DetectsStateUniquely_OnStateFixtures(string fixtureName, string expected)
     {
         try { Ocr.Initialize(); } catch { return; } // 测试宿主不可用 OCR 时跳过
