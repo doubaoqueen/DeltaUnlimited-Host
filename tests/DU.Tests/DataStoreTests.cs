@@ -105,6 +105,17 @@ public class DataStoreTests
     }
 
     [Fact]
+    public void Elements_Contains_WfModeCard_WithCoord()
+    {
+        var table = CreateStore().LoadElements();
+        Assert.True(table.Elements.ContainsKey("wf_mode_card"));
+        var def = table.Elements["wf_mode_card"];
+        Assert.Equal("coord", def.Strategy);
+        Assert.NotNull(def.Params.X);
+        Assert.NotNull(def.Params.Y);
+    }
+
+    [Fact]
     public void Chain_EnterMatchFirst_HasAutomatedSteps()
     {
         var chain = CreateStore().LoadChain("enter_match_first.json");
@@ -115,9 +126,11 @@ public class DataStoreTests
         Assert.True(firstKey >= 0 && firstKey < firstPause, "首个 pause 不得出现在首次 Tab 之前");
         Assert.Contains(chain.Steps, s => s.Op == "click_element" && s.Element == "start_action_button");
         Assert.Contains(chain.Steps, s => s.Op == "click_element" && s.Element == "zerodam_card");
+        Assert.Contains(chain.Steps, s => s.Op == "click_element" && s.Element == "wf_mode_card");
         Assert.Contains(chain.Steps, s => s.Op == "click_element" && s.Element == "confirm_loadout_button");
         Assert.Contains(chain.Steps, s => s.Op == "click_element" && s.Element == "continue_anyway_button");
         Assert.Contains(chain.Steps, s => s.Op == "if_screen" && s.Screen == "map_pool");
+        Assert.Contains(chain.Steps, s => s.Op == "wait_screen" && s.Screen == "mode_select" && s.Absent == true);
         Assert.Contains(chain.Steps, s => s.Op == "mark_unknown");
         Assert.Contains(chain.Steps, s => s.Op == "wait_screen" && s.Screen == "char_select");
     }
