@@ -63,4 +63,26 @@ public sealed class HumanizerConfig
     // 长按：时长抖动系数
     [JsonPropertyName("hold_jitter_min")] public double HoldJitterMin { get; set; } = 0.92;
     [JsonPropertyName("hold_jitter_max")] public double HoldJitterMax { get; set; } = 1.08;
+    // 鼠标轨迹拟人化（弧线/缓动/过冲/抖动）
+    [JsonPropertyName("mouse")] public MousePathConfig? Mouse { get; set; }
+}
+
+/// <summary>拟人鼠标路径参数（humanizer.mouse）：缺失时用默认值。</summary>
+public sealed class MousePathConfig
+{
+    // 移动总时长上下限（ms，按距离缩放后夹取）
+    [JsonPropertyName("min_duration_ms")] public int MinDurationMs { get; set; } = 250;
+    [JsonPropertyName("max_duration_ms")] public int MaxDurationMs { get; set; } = 650;
+    // 每像素追加时长（ms）：距离越远移动越慢，符合人手习惯
+    [JsonPropertyName("per_pixel_ms")] public double PerPixelMs { get; set; } = 0.5;
+    // 每步间隔（ms，实际按 ±30% 随机）
+    [JsonPropertyName("step_interval_ms")] public int StepIntervalMs { get; set; } = 12;
+    // 弧线最大曲率（法向偏移上限 px）
+    [JsonPropertyName("curvature_max_px")] public int CurvatureMaxPx { get; set; } = 90;
+    // 途中逐点抖动（px）
+    [JsonPropertyName("jitter_px")] public int JitterPx { get; set; } = 2;
+    // 过冲概率与幅度（冲过头再收回，px）
+    [JsonPropertyName("overshoot_probability")] public double OvershootProbability { get; set; } = 0.18;
+    [JsonPropertyName("overshoot_px_min")] public int OvershootPxMin { get; set; } = 5;
+    [JsonPropertyName("overshoot_px_max")] public int OvershootPxMax { get; set; } = 22;
 }

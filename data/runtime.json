@@ -22,6 +22,17 @@
     "step_jitter_min": 0.8,
     "step_jitter_max": 1.2,
     "hold_jitter_min": 0.92,
-    "hold_jitter_max": 1.08
+    "hold_jitter_max": 1.08,
+    "mouse": {
+      "min_duration_ms": 250,
+      "max_duration_ms": 650,
+      "per_pixel_ms": 0.5,
+      "step_interval_ms": 12,
+      "curvature_max_px": 90,
+      "jitter_px": 2,
+      "overshoot_probability": 0.18,
+      "overshoot_px_min": 5,
+      "overshoot_px_max": 22
+    }
   }
 }

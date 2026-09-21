@@ -1,3 +1,4 @@
+using DeltaUnlimited.Data;
 using DeltaUnlimited.Input;
 using Xunit;
 
@@ -42,5 +43,74 @@ public class InputServiceTests
     {
         var tokens = InputService.SplitCombo(" ctrl + left ");
         Assert.Equal(new[] { "ctrl", "left" }, tokens);
+    }
+
+    // ===== 拟人鼠标路径规划（纯逻辑） =====
+
+    [Fact]
+    public void MousePathPlanner_EndsExactlyAtTarget()
+    {
+        var rng = new Random(42);
+        for (int i = 0; i < 20; i++)
+        {
+            var path = MousePathPlanner.Plan(new(100, 100), new(1500, 800), new MousePathConfig(), rng);
+            Assert.Equal(1500, path[^1].X);
+            Assert.Equal(800, path[^1].Y);
+        }
+    }
+
+    [Fact]
+    public void MousePathPlanner_ShortDistance_SingleWaypoint()
+    {
+        var path = MousePathPlanner.Plan(new(500, 500), new(503, 502), new MousePathConfig(), new Random(1));
+        Assert.Single(path);
+        Assert.Equal(new ScreenPoint(503, 502), path[0]);
+    }
+
+    [Fact]
+    public void MousePathPlanner_CurvedPath_DeviatesFromStraightLine()
+    {
+        // 弧线特征：随机路径应出现明显偏离中线的点（证明不是直线瞬移）
+        var rng = new Random(7);
+        bool deviated = false;
+        for (int i = 0; i < 10 && !deviated; i++)
+        {
+            var path = MousePathPlanner.Plan(new(400, 400), new(1400, 400), new MousePathConfig(), rng);
+            deviated = path.Any(p => Math.Abs(p.Y - 400) > 10);
+        }
+        Assert.True(deviated, "路径应出现弧线偏离（否则轨迹是直线）");
+    }
+
+    [Fact]
+    public void MousePathPlanner_Overshoot_WhenForced_ExtendsBeyondTarget()
+    {
+        var cfg = new MousePathConfig { OvershootProbability = 1.0, OvershootPxMin = 10, OvershootPxMax = 10 };
+        var path = MousePathPlanner.Plan(new(0, 0), new(1000, 0), cfg, new Random(3));
+        Assert.True(path.Any(p => p.X > 1000), "应存在冲过目标的点");
+        Assert.Equal(1000, path[^1].X); // 末点仍精确回到目标
+        Assert.Equal(0, path[^1].Y);
+    }
+
+    [Fact]
+    public void MousePathPlanner_Steps_ScaleWithDistance()
+    {
+        var rng = new Random(11);
+        var shortPath = MousePathPlanner.Plan(new(0, 0), new(60, 0), new MousePathConfig(), rng);
+        var longPath = MousePathPlanner.Plan(new(0, 0), new(1500, 0), new MousePathConfig(), rng);
+        Assert.True(longPath.Count > shortPath.Count, "远距离应比近距离步数多（轨迹更细腻）");
+    }
+
+    [Fact]
+    public void MousePathPlanner_AllPoints_WithinBoundingBox()
+    {
+        // 所有点（含过冲）应落在起点/终点外扩 (曲率+抖动+过冲) 的包围盒内
+        var cfg = new MousePathConfig { OvershootProbability = 1.0, OvershootPxMax = 22 };
+        var path = MousePathPlanner.Plan(new(500, 500), new(1200, 700), cfg, new Random(5));
+        const int margin = 100;
+        foreach (var p in path)
+        {
+            Assert.InRange(p.X, 500 - margin, 1200 + margin);
+            Assert.InRange(p.Y, 500 - margin, 700 + margin);
+        }
     }
 }

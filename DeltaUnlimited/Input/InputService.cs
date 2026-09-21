@@ -46,11 +46,10 @@ public static class InputService
     private static int Rand(int min, int max) => Rng.Next(min, max + 1);
 
     /// <summary>把鼠标移动到屏幕坐标 (x, y) 并左键单击。
-    /// 移动用分段缓动（拟人）；按下前用绝对坐标钉死落点（相对移动受指针加速影响会漂移）。</summary>
+    /// 移动=拟人弧线路径（贝塞尔+缓动+过冲+抖动），全程绝对坐标不受系统指针加速影响，末点即精确落点。</summary>
     public static void ClickAt(int screenX, int screenY)
     {
-        MoveTo(screenX, screenY);
-        SendAbsolute(screenX, screenY); // 精确落点：不受“提高指针精确度”加速影响
+        MoveHumanized(screenX, screenY); // 拟人弧线路径，末点即精确落点（无需再“钉”一次）
         GetCursorPos(out POINT cur);
         Console.WriteLine($"[Input] 光标落点校验: ({cur.X}, {cur.Y})，目标 ({screenX}, {screenY})");
         Thread.Sleep(Rand(Config.ClickPauseMin, Config.ClickPauseMax)); // 到达后的自然停顿
@@ -62,6 +61,23 @@ public static class InputService
 
     /// <summary>绝对定位：SendInput 归一化坐标（0-65535），不受鼠标加速影响。</summary>
     public static void MoveAbsoluteTo(int screenX, int screenY) => SendAbsolute(screenX, screenY);
+
+    /// <summary>拟人化移动鼠标到屏幕坐标：随机弧线 + 缓动 + 过冲 + 抖动，全程绝对坐标（不受系统指针加速影响），
+    /// 路径末点精确等于目标（无需再“钉”一次）。参数来自 runtime.json 的 humanizer.mouse。</summary>
+    public static void MoveHumanized(int screenX, int screenY)
+    {
+        GetCursorPos(out POINT cur);
+        var cfg = Config.Mouse ?? new MousePathConfig();
+        var path = MousePathPlanner.Plan(new ScreenPoint(cur.X, cur.Y), new ScreenPoint(screenX, screenY), cfg, Rng);
+        int lo = Math.Max(1, (int)(cfg.StepIntervalMs * 0.7));
+        int hi = Math.Max(1, (int)(cfg.StepIntervalMs * 1.3));
+        foreach (var p in path)
+        {
+            SendAbsolute(p.X, p.Y);
+            Thread.Sleep(Rand(lo, hi));
+        }
+        Console.WriteLine($"[Input] 拟人鼠标移动 ({cur.X},{cur.Y}) → ({screenX},{screenY})，{path.Count} 步");
+    }
 
     private static void SendAbsolute(int screenX, int screenY)
     {
