@@ -34,7 +34,7 @@
       "actions": ["点击 行前备战 → 地图选择"]
     },
     "plaza_ready": {
-      "note": "备战界面-常态（右下“配装|出发”）；require_all 防串台：配装界面也有'配装'字样（'确认配装'），必须'出发'同时在场才认",
+      "note": "备战界面-常态（右下“配装|出发”）；require_all 防串台：配装界面也有'配装'字样（'确认配装'），必须'出发'同时在场才认。⚠️ 左下角世界聊天内容不稳定，禁用做标记；但其下方 (213,1030)-(332,1071) 是固定“Tab”提示条（与特勤处底部中间 (890,955)-(1035,1010) 的提示条位置不同，plaza_first 同样适用，可作人工区分参考，暂不做标记避免 plaza_first/plaza_ready 互串）",
       "markers": [
         { "type": "ocr", "keywords": ["配装", "出发"], "require_all": true, "region_name": "zone_bottom_right" },
         { "type": "template", "template": "assets/templates/depart_button.png", "threshold": 0.85 }
@@ -58,10 +58,11 @@
       "actions": ["点击 开始行动 → 配装"]
     },
     "loadout": {
-      "note": "配装界面（右下“确认配装”按钮）。2026-09-21 实测：全帧 OCR 会丢“装”字（读成 确/认/配），区域路径尚稳；新增按钮文字像素模板兜底。另一标识“制式套装”为美术字 OCR 完全读不出，待人工标定坐标后补模板。",
+      "note": "配装界面（右下“确认配装”按钮）。2026-09-21 实测：全帧 OCR 会丢“装”字（读成 确/认/配），区域路径尚稳；确认配装按钮与“制式套装”卡片（(1660,880)-(1730,898)，美术字 OCR 读不出）均用像素模板兜底。",
       "markers": [
         { "type": "ocr", "keywords": ["确认配装"], "region_name": "zone_bottom_right" },
-        { "type": "template", "template": "assets/templates/confirm_loadout_button.png", "threshold": 0.85 }
+        { "type": "template", "template": "assets/templates/confirm_loadout_button.png", "threshold": 0.85 },
+        { "type": "template", "template": "assets/templates/standard_set_card.png", "threshold": 0.85 }
       ],
       "actions": ["点击 确认配装"]
     },
@@ -72,6 +73,14 @@
         { "type": "ocr", "keywords": ["仍要继续"] }
       ],
       "actions": ["点击 仍要继续"]
+    },
+    "settlement": {
+      "note": "对局结算画面（真机 2026-09-21 22:58:08 现场标定：大标题“撤离成功”，另有“当局…”“装备价值”“提高收益”；底部无空格继续条，继续方式待标定）。跑刀结算后出现，也可能在进场链路中途弹出——链路遇此界面先人工确认，不自动按键",
+      "markers": [
+        { "type": "ocr", "keywords": ["撤离成功"] },
+        { "type": "ocr", "keywords": ["装备价值"] }
+      ],
+      "actions": ["人工确认结算画面（继续方式待标定）"]
     },
     "matching": {
       "note": "匹配中（右下按钮实际文字为“取消行动”，旧文档误作“取消匹配”；实测 OCR 拆字“取/消/行/动”行内可拼）",

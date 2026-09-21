@@ -235,6 +235,7 @@ public class VisionTests
     [InlineData("screenshots/unknown/unknown_20260921_225937.png", "lobby")]
     [InlineData("screenshots/unknown/unknown_20260921_225900.png", "loadout")]
     [InlineData("screenshots/captured/chain_6_after_tab_225735.png", "plaza_first")]
+    [InlineData("screenshots/captured/chain_fail_20260921_225808.png", "settlement")]
     public void ScreenDetector_DetectsStateUniquely_OnLiveCaptures(string rel, string expected)
     {
         try { Ocr.Initialize(); } catch { return; } // 测试宿主不可用 OCR 时跳过
@@ -250,5 +251,22 @@ public class VisionTests
         Assert.NotNull(guess);
         Assert.Equal(expected, guess!.Name);
         Assert.Empty(guess.Alternatives); // 唯一命中：特勤处提示条/确认配装模板不得与其他界面串台
+    }
+
+    [Fact]
+    public void TemplateMatcher_StandardSetCard_MatchesLoadoutCaptures()
+    {
+        // “制式套装”卡片模板（用户标定 (1660,880)-(1730,898)，OCR 读不出的美术字）：现场配装截图必须命中且回到卡片中心。
+        string root = RepoRoot;
+        string tpl = Path.Combine(root, "assets", "templates", "standard_set_card.png");
+        if (!File.Exists(tpl)) return;
+
+        string? live = LivePath("screenshots/unknown/unknown_20260921_225900.png");
+        if (live is null) return;
+        using var frame = Cv2.ImRead(live, ImreadModes.Color);
+        var r = TemplateMatcher.Match(frame, tpl, 0.85);
+        Assert.True(r.Found, $"现场配装截图应命中制式套装卡片模板，置信度 {r.Confidence:F3}");
+        Assert.InRange(r.CenterX, 1660, 1730);
+        Assert.InRange(r.CenterY, 880, 898);
     }
 }
