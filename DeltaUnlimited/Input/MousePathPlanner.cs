@@ -1,3 +1,5 @@
+using DeltaUnlimited.Data;
+
 namespace DeltaUnlimited.Input;
 
 /// <summary>屏幕坐标点（轻量结构，供路径规划与测试使用，无外部依赖）。</summary>
