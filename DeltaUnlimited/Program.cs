@@ -45,6 +45,7 @@ try
         case "chain": ChainCommand.Run(store, root, args); break;
         case "crop": CropCommand.Run(root, args); break;
         case "ocr": OcrProbeCommand.Run(root, args); break;
+        case "tplprobe": TplProbeCommand.Run(root, args); break;
         case "overlay": OverlayCommand.Run(store, root); break;
         case "windows": WindowsCommand.Run(); break;
         default: Usage.Print(); break;
