@@ -10,7 +10,7 @@ using OpenCvSharp;
 namespace DeltaUnlimited.Cli.Commands;
 
 /// <summary>chain：按 JSON 步骤顺序执行链路（半自动默认带人工确认点，--auto 全自动；支持 detect/if_screen/if_template 分支与 jump）。
-/// click_element 支持 expect_screen/timeout_ms/retries：点击后轮询验证目标界面，失败自动重试，仍失败留证据并中止（#7）。</summary>
+/// click_element 支持 expect_screen/timeout_ms/retries：点击后轮询验证目标界面，失败自动重试，仍失败留证据；配置 jump_to 时失败软跳转兜底（重判/人工确认），否则中止（#7）。</summary>
 public static class ChainCommand
 {
     public static void Run(DataStore data, string repoRoot, string[] cmdArgs)
@@ -97,6 +97,13 @@ public static class ChainCommand
                         catch (Exception ex)
                         {
                             Logger.Warn($"证据保存失败: {ex.Message}");
+                        }
+                        if (!string.IsNullOrEmpty(s.JumpTo))
+                        {
+                            Logger.Warn($"点击 {elName} 后未进入 {s.ExpectScreen}（证据帧已存），按 jump_to 跳转 “{s.JumpTo}”");
+                            Console.WriteLine($"  ⚠ 点击未达预期界面，跳转到 “{s.JumpTo}”");
+                            i = FindStep(s.JumpTo);
+                            continue;
                         }
                         throw new InvalidOperationException($"点击 {elName} 后 {retries + 1} 次均未进入预期界面 {s.ExpectScreen}，链路中止");
                     }

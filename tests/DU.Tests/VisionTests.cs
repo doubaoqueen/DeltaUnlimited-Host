@@ -169,4 +169,86 @@ public class VisionTests
         Assert.Equal(expected, guess!.Name);
         Assert.Empty(guess.Alternatives); // 唯一命中：多界面同时命中=串台，必须告警整改
     }
+
+    /// <summary>真机现场截图（screenshots/ 下，gitignore 不进仓库）。缺失时测试自动跳过。</summary>
+    private static string? LivePath(string rel)
+    {
+        string path = Path.Combine(RepoRoot, rel.Replace('/', Path.DirectorySeparatorChar));
+        if (File.Exists(path)) return path;
+        Console.WriteLine($"⚠️ 跳过：现场截图缺失 {path}");
+        return null;
+    }
+
+    [Fact]
+    public void TemplateMatcher_LobbyTabHint_MatchesLobbyCaptures_NotPlaza()
+    {
+        // 特勤处主标记=底部“Tab 开始游戏”提示条模板：两张特勤处现场截图必须命中；
+        // Tab 后到达的备战截图不得命中（防串台，否则 Tab 会在特勤处/备战之间来回切）。
+        string root = RepoRoot;
+        string tpl = Path.Combine(root, "assets", "templates", "lobby_tab_hint.png");
+        if (!File.Exists(tpl)) return;
+        foreach (var rel in new[]
+                 {
+                     "screenshots/unknown/unknown_20260921_225832.png",
+                     "screenshots/unknown/unknown_20260921_225937.png"
+                 })
+        {
+            string? live = LivePath(rel);
+            if (live is null) continue;
+            using var frame = Cv2.ImRead(live, ImreadModes.Color);
+            var r = TemplateMatcher.Match(frame, tpl, 0.85);
+            Assert.True(r.Found, $"{rel} 应命中 Tab 提示条，置信度 {r.Confidence:F3}");
+        }
+
+        string? plaza = LivePath("screenshots/captured/chain_6_after_tab_225735.png");
+        if (plaza is null) return;
+        using var pf = Cv2.ImRead(plaza, ImreadModes.Color);
+        var pr = TemplateMatcher.Match(pf, tpl, 0.85);
+        Assert.False(pr.Found, $"Tab 提示条模板在备战截图上误命中（{pr.Confidence:F3}）—— 特勤处标记会串台");
+    }
+
+    [Fact]
+    public void TemplateMatcher_ConfirmLoadoutButton_MatchesLiveAndFixture()
+    {
+        // 确认配装按钮模板：今天现场截图必须命中（自匹配），历史 fixture（另一晚截图）也应命中（跨时刻稳定）。
+        string root = RepoRoot;
+        string tpl = Path.Combine(root, "assets", "templates", "confirm_loadout_button.png");
+        if (!File.Exists(tpl)) return;
+
+        string? live = LivePath("screenshots/unknown/unknown_20260921_225900.png");
+        if (live is not null)
+        {
+            using var frame = Cv2.ImRead(live, ImreadModes.Color);
+            var r = TemplateMatcher.Match(frame, tpl, 0.85);
+            Assert.True(r.Found, $"现场配装截图应命中确认配装模板，置信度 {r.Confidence:F3}");
+        }
+
+        string? fixture = FixturePath("loadout.png");
+        if (fixture is null) return;
+        using var ff = Cv2.ImRead(fixture, ImreadModes.Color);
+        var fr = TemplateMatcher.Match(ff, tpl, 0.85);
+        Assert.True(fr.Found, $"历史配装 fixture 应命中确认配装模板，置信度 {fr.Confidence:F3}");
+    }
+
+    [Theory]
+    [InlineData("screenshots/unknown/unknown_20260921_225832.png", "lobby")]
+    [InlineData("screenshots/unknown/unknown_20260921_225937.png", "lobby")]
+    [InlineData("screenshots/unknown/unknown_20260921_225900.png", "loadout")]
+    [InlineData("screenshots/captured/chain_6_after_tab_225735.png", "plaza_first")]
+    public void ScreenDetector_DetectsStateUniquely_OnLiveCaptures(string rel, string expected)
+    {
+        try { Ocr.Initialize(); } catch { return; } // 测试宿主不可用 OCR 时跳过
+        if (Ocr.Engine is null || !Ocr.Engine.IsAvailable) return;
+
+        string? live = LivePath(rel);
+        if (live is null) return;
+
+        using var frame = Cv2.ImRead(live, ImreadModes.Color);
+        var table = new DataStore(RepoRoot).LoadScreens();
+
+        var guess = ScreenDetector.Detect(frame, table, RepoRoot);
+        Assert.NotNull(guess);
+        Assert.Equal(expected, guess!.Name);
+        Assert.Empty(guess.Alternatives); // 唯一命中：特勤处提示条/确认配装模板不得与其他界面串台
+    }
 }

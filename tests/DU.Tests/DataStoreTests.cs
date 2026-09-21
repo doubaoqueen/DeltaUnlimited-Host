@@ -84,12 +84,19 @@ public class DataStoreTests
     public void Elements_EntryChainButtons_Present()
     {
         var table = CreateStore().LoadElements();
-        foreach (var name in new[] { "start_action_button", "confirm_loadout_button", "continue_anyway_button" })
+        foreach (var name in new[] { "start_action_button", "continue_anyway_button" })
         {
             Assert.True(table.Elements.ContainsKey(name), $"缺少元素 {name}");
             Assert.Equal("ocr", table.Elements[name].Strategy);
             Assert.NotEmpty(table.Elements[name].Params.Keywords!);
         }
+
+        // 确认配装：2026-09-21 实测全帧 OCR 丢“装”字，改模板主定位+坐标兜底
+        Assert.True(table.Elements.ContainsKey("confirm_loadout_button"), "缺少元素 confirm_loadout_button");
+        var def = table.Elements["confirm_loadout_button"];
+        Assert.Equal("template", def.Strategy);
+        Assert.True(File.Exists(Path.Combine(DataStore.FindRoot(), def.Params.Template!)),
+            $"模板文件缺失: {def.Params.Template}");
     }
 
     [Fact]

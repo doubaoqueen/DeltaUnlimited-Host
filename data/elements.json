@@ -33,9 +33,9 @@
       "params": { "keywords": ["开始行动"], "region_name": "zone_right_mid", "x": 1651, "y": 641 }
     },
     "confirm_loadout_button": {
-      "note": "确认配装按钮（配装界面右下；区域实测命中 @(1647,944)）",
-      "strategy": "ocr",
-      "params": { "keywords": ["确认配装"], "region_name": "zone_bottom_right", "x": 1684, "y": 955 }
+      "note": "确认配装按钮（配装界面右下）。2026-09-21 实测全帧 OCR 丢“装”字，改像素模板主定位+坐标兜底；模板中心≈按钮中心 (1684,955)",
+      "strategy": "template",
+      "params": { "template": "assets/templates/confirm_loadout_button.png", "threshold": 0.85, "x": 1684, "y": 955 }
     },
     "continue_anyway_button": {
       "note": "仍要继续按钮（入局提醒弹窗；全帧实测命中 @(922,694)）",
