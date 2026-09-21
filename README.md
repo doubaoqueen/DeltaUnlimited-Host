@@ -36,11 +36,15 @@ docs/                 项目大纲/模块说明/界面元素清单/导航设计/
 ## 构建与测试
 
 ```
-dotnet build                # 仓库根（或 dotnet build DeltaUnlimited/DeltaUnlimited.csproj）
+dotnet build                # 仓库根（经 DeltaUnlimited.slnx；或 dotnet build DeltaUnlimited/DeltaUnlimited.csproj）
 dotnet test tests\DU.Tests  # 单元测试（79 用例）
 ```
 
 ## CLI 命令速览
+
+> ⚠️ `dotnet run` 必须指定项目（`dotnet build` 认根目录的 `DeltaUnlimited.slnx`，但 `dotnet run` 不认解决方案）。两种等价写法：
+> - 仓库根目录：`dotnet run --project DeltaUnlimited\DeltaUnlimited.csproj -- <命令>`
+> - 或先 `cd DeltaUnlimited`，再 `dotnet run -- <命令>`（下面示例用简写）
 
 ```
 dotnet run -- chain enter_match.json   # 进场链路 v5（任意界面启动，--auto 全自动）
