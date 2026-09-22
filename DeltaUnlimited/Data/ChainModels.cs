@@ -66,4 +66,8 @@ public sealed class ChainStep
     /// <summary>wait_screen 专用：true = 等待界面消失（如"取消匹配"消失），false = 等待出现。</summary>
     [JsonPropertyName("absent")]
     public bool? Absent { get; set; }
+
+    /// <summary>if_ocr 专用：OCR 关键词列表（任一严格命中即跳转 jump_to）。</summary>
+    [JsonPropertyName("keywords")]
+    public List<string>? Keywords { get; set; }
 }

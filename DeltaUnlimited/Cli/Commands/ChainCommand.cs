@@ -247,6 +247,30 @@ public static class ChainCommand
                     break;
                 }
 
+                case "if_ocr":
+                {
+                    // 关键词条件分支：当前帧 OCR 严格命中任一关键词则跳转（如入局提醒弹窗内的“未转移”行检查）
+                    var keywords = s.Keywords ?? throw new InvalidDataException("if_ocr 步骤缺少 keywords");
+                    if (Ocr.Engine is not { IsAvailable: true })
+                    {
+                        Console.WriteLine("  ⚠️ OCR 不可用，if_ocr 判为未命中（fail-open）");
+                        Logger.Warn("if_ocr: OCR 不可用，判为未命中");
+                        break;
+                    }
+                    using var frame = CaptureService.CaptureWindowMat(winKeyword);
+                    using var norm = FrameTools.Normalize(frame, runtime.DesignWidth, runtime.DesignHeight);
+                    bool hit = Ocr.FindStrict(norm, null, keywords) is { Found: true };
+                    Console.WriteLine($"  关键词判断: [{string.Join("/", keywords)}] → {(hit ? "命中 ✅" : "未命中 ❌")}");
+                    Logger.Info($"if_ocr [{string.Join("/", keywords)}]: {(hit ? "命中" : "未命中")}");
+                    if (hit && !string.IsNullOrEmpty(s.JumpTo))
+                    {
+                        Console.WriteLine($"  ↪ 跳转到 “{s.JumpTo}”");
+                        i = FindStep(s.JumpTo);
+                        continue;
+                    }
+                    break;
+                }
+
                 case "jump":
                 {
                     string to = s.JumpTo ?? throw new InvalidDataException("jump 步骤缺少 jump_to 字段");
@@ -327,6 +351,11 @@ public static class ChainCommand
                         errors.Add($"步骤{idx}: 界面 “{s.Screen}” 不存在于 screens.json");
                     else if (screens.Screens[s.Screen].Markers.Count == 0)
                         errors.Add($"步骤{idx}: 界面 “{s.Screen}” 没有任何识别标记（引用无标记界面）");
+                    break;
+
+                case "if_ocr":
+                    if (s.Keywords is not { Count: > 0 })
+                        errors.Add($"步骤{idx}: if_ocr 缺少 keywords");
                     break;
 
                 case "if_template":

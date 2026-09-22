@@ -162,6 +162,7 @@ public class DataStoreTests
         Assert.Contains(chain.Steps, s => s.Op == "click_element" && s.Element == "preset_balanced_button");
         Assert.Contains(chain.Steps, s => s.Op == "click_element" && s.Element == "plaza_loadout_button");
         Assert.Contains(chain.Steps, s => s.Op == "if_screen" && s.Screen == "preset_select");
+        Assert.Contains(chain.Steps, s => s.Op == "if_ocr" && s.Keywords is { Count: > 0 });
         Assert.Contains(chain.Steps, s => s.Op == "mark_unknown");
         Assert.Contains(chain.Steps, s => s.Op == "wait_screen" && s.Screen == "char_select");
     }
