@@ -135,6 +135,11 @@ public class DataStoreTests
         Assert.Equal("coord", def.Strategy);
         Assert.Equal(416, def.Params.X);
         Assert.Equal(933, def.Params.Y);
+
+        Assert.True(table.Elements.ContainsKey("plaza_loadout_button"));
+        var loadout = table.Elements["plaza_loadout_button"];
+        Assert.Equal("ocr", loadout.Strategy);
+        Assert.Contains("配装", loadout.Params.Keywords!);
     }
 
     [Fact]
@@ -155,6 +160,7 @@ public class DataStoreTests
         Assert.Contains(chain.Steps, s => s.Op == "wait_screen" && s.Screen == "mode_select" && s.Absent == true);
         Assert.Contains(chain.Steps, s => s.Op == "click_element" && s.Element == "standard_set_card");
         Assert.Contains(chain.Steps, s => s.Op == "click_element" && s.Element == "preset_balanced_button");
+        Assert.Contains(chain.Steps, s => s.Op == "click_element" && s.Element == "plaza_loadout_button");
         Assert.Contains(chain.Steps, s => s.Op == "if_screen" && s.Screen == "preset_select");
         Assert.Contains(chain.Steps, s => s.Op == "mark_unknown");
         Assert.Contains(chain.Steps, s => s.Op == "wait_screen" && s.Screen == "char_select");
