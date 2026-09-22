@@ -236,6 +236,7 @@ public class VisionTests
     [InlineData("screenshots/unknown/unknown_20260921_225900.png", "loadout")]
     [InlineData("screenshots/captured/chain_6_after_tab_225735.png", "plaza_first")]
     [InlineData("screenshots/captured/chain_fail_20260921_225808.png", "settlement")]
+    [InlineData("screenshots/captured/capture_20260922_184254.png", "preset_select")]
     public void ScreenDetector_DetectsStateUniquely_OnLiveCaptures(string rel, string expected)
     {
         try { Ocr.Initialize(); } catch { return; } // 测试宿主不可用 OCR 时跳过

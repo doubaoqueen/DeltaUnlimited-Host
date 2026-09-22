@@ -52,6 +52,11 @@
       "strategy": "template",
       "params": { "template": "assets/templates/standard_set_card.png", "threshold": 0.85, "x": 1695, "y": 889 }
     },
+    "preset_balanced_button": {
+      "note": "装备预设界面“均衡”卡底部的消耗券按钮（用户标定点击区 (266,902)-(567,965)，中心 (416,933)）。点击直接回配装界面，真正扣券发生在确认配装时；生存/火力卡按钮待 GUI 选项时再标定",
+      "strategy": "coord",
+      "params": { "x": 416, "y": 933 }
+    },
     "wf_mode_card": {
       "note": "模式选择界面的“烽火地带”卡片（鼠标未悬停时实测矩形 (90,815,515,181)，中心 (348,906)）。坐标直点 + 链路用“模式选择界面消失”验证；悬停变色不影响坐标点击",
       "strategy": "coord",

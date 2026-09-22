@@ -123,6 +123,21 @@ public class DataStoreTests
     }
 
     [Fact]
+    public void Elements_Contains_PresetFlow()
+    {
+        // 制式套装配装流：制式套装卡片（模板主定位）+ 均衡卡消耗按钮（坐标，用户标定点击区 (266,902)-(567,965)）
+        var table = CreateStore().LoadElements();
+        Assert.True(table.Elements.ContainsKey("standard_set_card"));
+        Assert.Equal("template", table.Elements["standard_set_card"].Strategy);
+
+        Assert.True(table.Elements.ContainsKey("preset_balanced_button"));
+        var def = table.Elements["preset_balanced_button"];
+        Assert.Equal("coord", def.Strategy);
+        Assert.Equal(416, def.Params.X);
+        Assert.Equal(933, def.Params.Y);
+    }
+
+    [Fact]
     public void Chain_EnterMatch_HasAutomatedSteps()
     {
         var chain = CreateStore().LoadChain("enter_match.json");
@@ -138,6 +153,9 @@ public class DataStoreTests
         Assert.Contains(chain.Steps, s => s.Op == "click_element" && s.Element == "continue_anyway_button");
         Assert.Contains(chain.Steps, s => s.Op == "if_screen" && s.Screen == "map_pool");
         Assert.Contains(chain.Steps, s => s.Op == "wait_screen" && s.Screen == "mode_select" && s.Absent == true);
+        Assert.Contains(chain.Steps, s => s.Op == "click_element" && s.Element == "standard_set_card");
+        Assert.Contains(chain.Steps, s => s.Op == "click_element" && s.Element == "preset_balanced_button");
+        Assert.Contains(chain.Steps, s => s.Op == "if_screen" && s.Screen == "preset_select");
         Assert.Contains(chain.Steps, s => s.Op == "mark_unknown");
         Assert.Contains(chain.Steps, s => s.Op == "wait_screen" && s.Screen == "char_select");
     }
