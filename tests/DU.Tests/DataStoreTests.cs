@@ -174,6 +174,17 @@ public class DataStoreTests
         var table = CreateStore().LoadLoadoutPresets();
         Assert.Equal(1, table.SchemaVersion);
         Assert.NotNull(table.Presets);
+        Assert.Equal("preset", table.Policy.Source);
+        Assert.Equal(3, table.Policy.MaxTier);
+    }
+
+    [Fact]
+    public void ItemCatalog_Loads_EmptyStub()
+    {
+        // 物品库预留：schema 已建、items 为空即可加载（识别管线与录入约定见 docs/仓库交互手册.md）
+        var table = CreateStore().LoadItemCatalog();
+        Assert.Equal(1, table.SchemaVersion);
+        Assert.NotNull(table.Items);
     }
 
     [Fact]

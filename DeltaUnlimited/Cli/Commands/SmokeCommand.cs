@@ -24,6 +24,12 @@ public static class SmokeCommand
         var items = data.LoadItemValues();
         Console.WriteLine($"[item_values.json] 材料 {items.Materials.Count} 种");
 
+        var catalog = data.LoadItemCatalog();
+        Console.WriteLine($"[item_catalog.json] 物品 {catalog.Items.Count} 种");
+
+        var presets = data.LoadLoadoutPresets();
+        Console.WriteLine($"[loadout_preset.json] 预设 {presets.Presets.Count} 套, 策略 source={presets.Policy.Source} max_tier={presets.Policy.MaxTier}");
+
         var points = data.LoadZeroDamPoints();
         Console.WriteLine($"[zero_dam_points.json] 撤离点 {points.ExtractPoints.Count}, 搜刮点 {points.LootPoints.Count}");
 

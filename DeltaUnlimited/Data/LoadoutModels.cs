@@ -14,6 +14,22 @@ public sealed class LoadoutPresetTable
 
     [JsonPropertyName("presets")]
     public List<LoadoutPreset> Presets { get; set; } = new();
+
+    /// <summary>配装策略（GUI 预留）：优先预设装配 or 优先从仓库携带 + 最高携带品质档位。</summary>
+    [JsonPropertyName("policy")]
+    public LoadoutPolicy Policy { get; set; } = new();
+}
+
+/// <summary>配装策略（GUI 预留）：数据槽，正式启用前字段可改。</summary>
+public sealed class LoadoutPolicy
+{
+    /// <summary>preset=优先使用预设装配（制式套装等）；warehouse=优先从仓库携带道具（缺则跳过不补，规则见 docs/仓库交互手册.md）。</summary>
+    [JsonPropertyName("source")]
+    public string Source { get; set; } = "preset";
+
+    /// <summary>最高携带品质档位：白1/绿2/蓝3/紫4/金5/红6；0=不限。</summary>
+    [JsonPropertyName("max_tier")]
+    public int MaxTier { get; set; } = 3;
 }
 
 /// <summary>一套配装方案（草案字段，正式启用前可改）。</summary>
