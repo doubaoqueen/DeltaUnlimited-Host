@@ -368,3 +368,7 @@ screenshots/unknown/
 
 tests/fixtures/
 
+
+# 其他 AI 工具工件
+.zcodeignore
+
