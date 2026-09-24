@@ -30,6 +30,15 @@ public static class Ocr
     public static IReadOnlyList<string> FindAllStrict(Mat frame, int[]? region, IReadOnlyList<string> keywords)
         => MatchAll(frame, region, keywords).Select(r => r.Keyword).ToList();
 
+    /// <summary>一次识别内统计关键词的严格命中总次数（裸装鉴别等计数场景用；与 FindStrict 同源严格层）。</summary>
+    public static int CountStrict(Mat frame, int[]? region, IReadOnlyList<string> keywords)
+    {
+        if (Engine is null || !Engine.IsAvailable || keywords is not { Count: > 0 })
+            return 0;
+        var words = Engine.Recognize(frame, region);
+        return keywords.Sum(k => OcrTextMatcher.CountStrict(words, k));
+    }
+
     private static List<OcrFindResult> MatchAll(Mat frame, int[]? region, IReadOnlyList<string> keywords)
     {
         var results = new List<OcrFindResult>();

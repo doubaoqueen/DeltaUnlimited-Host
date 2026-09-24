@@ -259,9 +259,11 @@ public static class ChainCommand
                     }
                     using var frame = CaptureService.CaptureWindowMat(winKeyword);
                     using var norm = FrameTools.Normalize(frame, runtime.DesignWidth, runtime.DesignHeight);
-                    bool hit = Ocr.FindStrict(norm, null, keywords) is { Found: true };
-                    Console.WriteLine($"  关键词判断: [{string.Join("/", keywords)}] → {(hit ? "命中 ✅" : "未命中 ❌")}");
-                    Logger.Info($"if_ocr [{string.Join("/", keywords)}]: {(hit ? "命中" : "未命中")}");
+                    int need = Math.Max(1, s.MinCount ?? 1);
+                    int count = Ocr.CountStrict(norm, null, keywords);
+                    bool hit = count >= need;
+                    Console.WriteLine($"  关键词判断: [{string.Join("/", keywords)}] 命中 {count} 处（需 ≥{need}）→ {(hit ? "命中 ✅" : "未命中 ❌")}");
+                    Logger.Info($"if_ocr [{string.Join("/", keywords)}]: {count}/{need} {(hit ? "命中" : "未命中")}");
                     if (hit && !string.IsNullOrEmpty(s.JumpTo))
                     {
                         Console.WriteLine($"  ↪ 跳转到 “{s.JumpTo}”");
@@ -356,6 +358,8 @@ public static class ChainCommand
                 case "if_ocr":
                     if (s.Keywords is not { Count: > 0 })
                         errors.Add($"步骤{idx}: if_ocr 缺少 keywords");
+                    else if (s.MinCount is < 1)
+                        errors.Add($"步骤{idx}: if_ocr 的 min_count 必须 ≥1");
                     break;
 
                 case "if_template":

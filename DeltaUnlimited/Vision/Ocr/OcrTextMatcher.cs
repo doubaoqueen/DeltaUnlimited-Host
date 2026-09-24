@@ -81,6 +81,56 @@ public static class OcrTextMatcher
         return new OcrMatch(false, candidate, kw, 0, 0, 0, 0, hint);
     }
 
+    /// <summary>统计关键词的严格命中次数（单词包含 + 行内连续词窗口，同一行多次出现分别计数；裸装鉴别等计数场景用）。</summary>
+    public static int CountStrict(IReadOnlyList<OcrWord> words, string keyword)
+    {
+        string kw = Norm(keyword);
+        if (kw.Length == 0 || words.Count == 0) return 0;
+
+        int count = 0;
+
+        // 1) 单词严格命中：每个含关键词的单词计一次
+        foreach (var w in words)
+        {
+            if (Norm(w.Text).Contains(kw)) count++;
+        }
+
+        // 2) 行内连续词窗口：从左到右，窗口拼接首次包含关键词即计一次并跨过该窗口（拆词如 未+装+配）
+        foreach (var line in GroupLines(words))
+        {
+            var ordered = line.OrderBy(w => w.X).ToList();
+            int i = 0;
+            while (i < ordered.Count)
+            {
+                if (Norm(ordered[i].Text).Contains(kw)) { i++; continue; } // 已按单词计过，避免重复
+                var sb = new StringBuilder();
+                int j = i;
+                bool matched = false;
+                for (; j < ordered.Count; j++)
+                {
+                    sb.Append(Norm(ordered[j].Text));
+                    if (!sb.ToString().Contains(kw)) continue;
+                    matched = true;
+                    break;
+                }
+                if (matched)
+                {
+                    bool alreadyCounted = false;
+                    for (int k = i; k <= j; k++)
+                        if (Norm(ordered[k].Text).Contains(kw)) { alreadyCounted = true; break; }
+                    if (!alreadyCounted) count++;
+                    i = j + 1;
+                }
+                else
+                {
+                    i++;
+                }
+            }
+        }
+
+        return count;
+    }
+
     /// <summary>按垂直重叠分行：重叠 ≥ 较高词高度的一半才视为同一行（防止密集多行 HUD 串行）。</summary>
     internal static List<List<OcrWord>> GroupLines(IReadOnlyList<OcrWord> words)
     {

@@ -270,4 +270,31 @@ public class VisionTests
         Assert.InRange(r.CenterX, 1660, 1730);
         Assert.InRange(r.CenterY, 880, 898);
     }
+
+    [Fact]
+    public void Ocr_FindAllStrict_CountsUnequipped_OnLoadoutCapture()
+    {
+        // 裸装鉴别（check_loadout）依据：裸装配装界面应至少读到 4 处“未装配”（实测 7 处）
+        try { Ocr.Initialize(); } catch { return; } // 测试宿主不可用 OCR 时跳过
+        if (Ocr.Engine is null || !Ocr.Engine.IsAvailable) return;
+
+        string? live = LivePath("screenshots/unknown/unknown_20260921_225900.png");
+        if (live is null) return;
+        using var frame = Cv2.ImRead(live, ImreadModes.Color);
+        int count = Ocr.CountStrict(frame, null, new[] { "未装配" });
+        Assert.True(count >= 4, $"裸装配装界面应至少读到 4 处“未装配”，实际 {count}");
+    }
+
+    [Fact]
+    public void OcrTextMatcher_CountStrict_CountsSeparateAndMergedWords()
+    {
+        // 计数语义：拆词行（未+装+配）与合并词（未装配）都应计数，且同一行多次出现分别计数
+        var words = new List<OcrWord>
+        {
+            new("未", 0, 0, 10, 10), new("装", 12, 0, 10, 10), new("配", 24, 0, 10, 10),   // 拆词行 1
+            new("未装配", 0, 20, 30, 10),                                                  // 合并词行 2
+            new("未", 0, 40, 10, 10), new("装", 12, 40, 10, 10), new("配", 24, 40, 10, 10), // 拆词行 3
+        };
+        Assert.Equal(3, OcrTextMatcher.CountStrict(words, "未装配"));
+    }
 }

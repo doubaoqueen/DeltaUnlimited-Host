@@ -70,4 +70,8 @@ public sealed class ChainStep
     /// <summary>if_ocr 专用：OCR 关键词列表（任一严格命中即跳转 jump_to）。</summary>
     [JsonPropertyName("keywords")]
     public List<string>? Keywords { get; set; }
+
+    /// <summary>if_ocr 专用：最小命中词数（默认 1；如“未装配”≥4 判定裸装）。</summary>
+    [JsonPropertyName("min_count")]
+    public int? MinCount { get; set; }
 }
