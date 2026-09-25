@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
+using DeltaUnlimited.Capture;
 using DeltaUnlimited.Data;
 
 namespace DeltaUnlimited.Input;
@@ -42,22 +43,48 @@ public static class InputService
     private static HumanizerConfig Config = new();
 
     /// <summary>注入拟人化参数（启动时从 runtime.json 读取后调用）。</summary>
-    public static void Configure(HumanizerConfig config) => Config = config ?? new HumanizerConfig();
+    public static void Configure(HumanizerConfig config)
+    {
+        Config = config ?? new HumanizerConfig();
+        CaptureService.EnsureDpiAwareness(); // 绝对定位/系统光标读回必须在物理像素坐标系下一致
+    }
 
     private static int Rand(int min, int max) => Rng.Next(min, max + 1);
 
     /// <summary>把鼠标移动到屏幕坐标 (x, y) 并左键单击。
-    /// 移动=拟人弧线路径（贝塞尔+缓动+过冲+抖动），全程绝对坐标不受系统指针加速影响，末点即精确落点。</summary>
-    public static void ClickAt(int screenX, int screenY)
+    /// 移动=拟人弧线路径（贝塞尔+缓动+过冲+抖动），全程绝对坐标不受系统指针加速影响。
+    /// 点击前校验光标实际落点：偏差&gt;容差 → 直接绝对钉正一次 → 再校验；仍偏 → 放弃点击并返回 false（fail-open，绝不盲点）。
+    /// 点击永远只发生在校验通过的光标位置。容差 = humanizer.mouse.verify_tolerance_px。</summary>
+    public static bool ClickAt(int screenX, int screenY)
     {
-        MoveHumanized(screenX, screenY); // 拟人弧线路径，末点即精确落点（无需再“钉”一次）
-        GetCursorPos(out POINT cur);
-        Console.WriteLine($"[Input] 光标落点校验: ({cur.X}, {cur.Y})，目标 ({screenX}, {screenY})");
+        int tol = Math.Clamp((Config.Mouse ?? new MousePathConfig()).VerifyTolerancePx, 2, 30);
+        MoveHumanized(screenX, screenY); // 拟人弧线路径，末点即目标
         Thread.Sleep(Rand(Config.ClickPauseMin, Config.ClickPauseMax)); // 到达后的自然停顿
+
+        if (!VerifyLanding(screenX, screenY, tol, out POINT actual))
+        {
+            MoveAbsoluteTo(screenX, screenY); // 直接绝对钉正（无拟人/无过冲），排除末点丢失/轻微扰动
+            Thread.Sleep(10);
+            if (!VerifyLanding(screenX, screenY, tol, out actual))
+            {
+                Console.WriteLine($"[Input] ⛔ 点击被安全网拦截：光标实际 ({actual.X},{actual.Y}) 偏离目标 ({screenX},{screenY}) 超 {tol}px（疑似游戏抢光标/移动末点丢失）。未点击，保持当前状态。");
+                return false;
+            }
+            Console.WriteLine($"[Input] 首次落点偏离，已直接钉正: 光标 ({actual.X},{actual.Y})");
+        }
+
         SendMouse(MOUSEEVENTF_LEFTDOWN);
         Thread.Sleep(Rand(Config.PressHoldMin, Config.PressHoldMax)); // 按下到抬起的按压时长
         SendMouse(MOUSEEVENTF_LEFTUP);
-        Console.WriteLine($"[Input] 左键单击 屏幕({screenX}, {screenY})");
+        Console.WriteLine($"[Input] 左键单击 屏幕({screenX}, {screenY})，落点校验通过（实际 {actual.X},{actual.Y}）");
+        return true;
+    }
+
+    private static bool VerifyLanding(int screenX, int screenY, int tol, out POINT actual)
+    {
+        GetCursorPos(out actual);
+        Console.WriteLine($"[Input] 光标落点校验: ({actual.X}, {actual.Y})，目标 ({screenX}, {screenY})，容差 {tol}px");
+        return Math.Abs(actual.X - screenX) <= tol && Math.Abs(actual.Y - screenY) <= tol;
     }
 
     /// <summary>绝对定位：SendInput 归一化坐标（0-65535），不受鼠标加速影响。</summary>

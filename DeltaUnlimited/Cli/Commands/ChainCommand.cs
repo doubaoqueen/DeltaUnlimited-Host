@@ -30,6 +30,8 @@ public static class ChainCommand
         IntPtr hwnd = CaptureService.FindWindowByTitle(winKeyword);
         if (hwnd == IntPtr.Zero) throw new InvalidOperationException($"没找到标题含 “{winKeyword}” 的窗口");
 
+        CaptureService.LogWindowAnchor(hwnd, runtime.DesignWidth, runtime.DesignHeight);
+
         CommandUtil.InstallEmergencyStop();
 
         Console.WriteLine($"执行链路: {chain.Name}（{chain.Steps.Count} 步） 模式: {(auto ? "全自动" : "半自动（pause 步骤回车继续）")}");

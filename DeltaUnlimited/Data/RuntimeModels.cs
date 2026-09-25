@@ -89,4 +89,6 @@ public sealed class MousePathConfig
     [JsonPropertyName("overshoot_probability")] public double OvershootProbability { get; set; } = 0.18;
     [JsonPropertyName("overshoot_px_min")] public int OvershootPxMin { get; set; } = 5;
     [JsonPropertyName("overshoot_px_max")] public int OvershootPxMax { get; set; } = 22;
+    // 点击落点校验容差（px）：超差先直接钉正重试，仍超差则放弃点击（fail-open）
+    [JsonPropertyName("verify_tolerance_px")] public int VerifyTolerancePx { get; set; } = 6;
 }

@@ -28,8 +28,9 @@ public static class ElementClicker
             CaptureService.UnraiseWindow(hwnd);
             throw new InvalidOperationException("点击前窗口不可用（最小化？）");
         }
-        double fx = rect.Value.W / (double)designW;
-        double fy = rect.Value.H / (double)designH;
+        // 设计坐标 → 屏幕绝对坐标（窗口位置/DPI 缩放统一换算）
+        (int X, int Y) ToScreen(double dx, double dy) =>
+            CaptureService.MapDesignToScreen(rect.Value, designW, designH, dx, dy);
 
         int? clickX = null, clickY = null;
 
@@ -49,9 +50,8 @@ public static class ElementClicker
                 var found = Ocr.FindStrict(norm, region, def.Params.Keywords);
                 if (found is { Found: true })
                 {
-                    clickX = (int)Math.Round(rect.Value.X + found.CenterX * fx);
-                    clickY = (int)Math.Round(rect.Value.Y + found.CenterY * fy);
-                    Logger.Info($"元素 {elementName}: OCR 命中 “{found.MatchedText}” @ ({found.CenterX},{found.CenterY})");
+                    (clickX, clickY) = ToScreen(found.CenterX, found.CenterY);
+                    Logger.Info($"元素 {elementName}: OCR 命中 “{found.MatchedText}” @ ({found.CenterX},{found.CenterY}) → 屏幕 ({clickX},{clickY})");
                 }
                 else
                 {
@@ -65,9 +65,8 @@ public static class ElementClicker
                 var mr = TemplateMatcher.Match(norm, Path.Combine(repoRoot, tpl), def.Params.Threshold ?? 0.85, region);
                 if (mr.Found)
                 {
-                    clickX = (int)Math.Round(rect.Value.X + mr.CenterX * fx);
-                    clickY = (int)Math.Round(rect.Value.Y + mr.CenterY * fy);
-                    Logger.Info($"元素 {elementName}: 模板命中 @ ({mr.CenterX},{mr.CenterY}) 置信度 {mr.Confidence:F3}");
+                    (clickX, clickY) = ToScreen(mr.CenterX, mr.CenterY);
+                    Logger.Info($"元素 {elementName}: 模板命中 @ ({mr.CenterX},{mr.CenterY}) 置信度 {mr.Confidence:F3} → 屏幕 ({clickX},{clickY})");
                 }
                 else
                 {
@@ -79,8 +78,7 @@ public static class ElementClicker
         // 兜底：coord 坐标
         if (clickX is null && def.Params.X is not null && def.Params.Y is not null)
         {
-            clickX = (int)Math.Round(rect.Value.X + def.Params.X.Value * fx);
-            clickY = (int)Math.Round(rect.Value.Y + def.Params.Y.Value * fy);
+            (clickX, clickY) = ToScreen(def.Params.X.Value, def.Params.Y.Value);
             if (def.Strategy == "ocr" || def.Strategy == "template")
                 Logger.Warn($"元素 {elementName}: 使用坐标兜底 ({def.Params.X}, {def.Params.Y})");
         }
@@ -91,7 +89,8 @@ public static class ElementClicker
             throw new InvalidOperationException($"元素 {elementName} 定位失败：OCR 未命中且无坐标兜底（strategy={def.Strategy}）");
         }
 
-        InputService.ClickAt(clickX.Value, clickY.Value);
+        if (!InputService.ClickAt(clickX.Value, clickY.Value))
+            Logger.Warn($"元素 {elementName}: 点击被安全网拦截（落点校验失败，未点击）；链路后续等待/重试逻辑接管");
         CaptureService.UnraiseWindow(hwnd);
     }
 

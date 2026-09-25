@@ -86,6 +86,32 @@ public static class CaptureService
         return (origin.X, origin.Y, w, h);
     }
 
+    /// <summary>设计坐标（识别归一化 designW×designH）→ 屏幕绝对坐标（点击/移动用）。
+    /// 客户区与设计尺寸不一致（窗口缩放/DPI 拉伸）时按比例换算；窗口位置由客户区原点抵消。
+    /// 纯函数（client 由调用方提供），可单测。</summary>
+    public static (int X, int Y) MapDesignToScreen((int X, int Y, int W, int H) client, int designW, int designH, double designX, double designY)
+    {
+        double fx = client.W / (double)designW;
+        double fy = client.H / (double)designH;
+        return ((int)Math.Round(client.X + designX * fx), (int)Math.Round(client.Y + designY * fy));
+    }
+
+    /// <summary>打印窗口锚点诊断一行（屏幕/DPI/窗口矩形/客户区/缩放比），坐标问题定位用。</summary>
+    public static void LogWindowAnchor(IntPtr hwnd, int designW, int designH)
+    {
+        EnsureDpiAwareness();
+        var client = GetClientScreenRect(hwnd);
+        var wnd = GetWindowScreenRect(hwnd);
+        int sw = GetSystemMetrics(SM_CXSCREEN);
+        int sh = GetSystemMetrics(SM_CYSCREEN);
+        uint dpi = GetDpiForSystem();
+        string w = wnd is { } wr ? $"({wr.X},{wr.Y}) {wr.W}x{wr.H}" : "?";
+        string c = client is { } cr
+            ? $"({cr.X},{cr.Y}) {cr.W}x{cr.H} 缩放 ×{cr.W / (double)designW:F3}/×{cr.H / (double)designH:F3}"
+            : "?";
+        Console.WriteLine($"[坐标] 屏幕 {sw}x{sh} DPI {dpi}({dpi / 96.0 * 100.0:0}%)  窗口矩形 {w}  客户区 {c}");
+    }
+
     public sealed record CaptureOutcome(string Path, int X, int Y, int W, int H, double MeanR, double MeanG, double MeanB)
     {
         /// <summary>平均亮度太低 → 疑似黑屏（全屏独占/被遮挡/无桌面会话）。</summary>
@@ -351,6 +377,9 @@ public static class CaptureService
 
     [DllImport("user32.dll")]
     private static extern int GetSystemMetrics(int nIndex);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetDpiForSystem();
 
     [DllImport("user32.dll")]
     private static extern bool SetProcessDpiAwarenessContext(IntPtr value);

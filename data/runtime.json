@@ -33,7 +33,8 @@
       "jitter_px": 2,
       "overshoot_probability": 0.18,
       "overshoot_px_min": 5,
-      "overshoot_px_max": 22
+      "overshoot_px_max": 22,
+      "verify_tolerance_px": 6
     }
   }
 }

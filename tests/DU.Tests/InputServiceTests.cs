@@ -1,3 +1,4 @@
+using DeltaUnlimited.Capture;
 using DeltaUnlimited.Data;
 using DeltaUnlimited.Input;
 using Xunit;
@@ -112,5 +113,29 @@ public class InputServiceTests
             Assert.InRange(p.X, 500 - margin, 1200 + margin);
             Assert.InRange(p.Y, 500 - margin, 700 + margin);
         }
+    }
+
+    // ===== 设计坐标 → 屏幕坐标换算（纯函数，窗口化/DPI 缩放点击定位的核心） =====
+
+    [Fact]
+    public void MapDesignToScreen_ClientMatchesDesign_IdentityPlusOrigin()
+    {
+        // 客户区与设计尺寸一致（100% 缩放）：只加窗口客户区原点
+        var p = CaptureService.MapDesignToScreen((100, 50, 1920, 1080), 1920, 1080, 243, 873);
+        Assert.Equal((343, 923), p);
+    }
+
+    [Fact]
+    public void MapDesignToScreen_StretchedClient_ScalesByRatio()
+    {
+        // 4K@150% DPI 拉伸：客户区 2880×1620 = 设计 1920×1080 × 1.5
+        var p = CaptureService.MapDesignToScreen((300, 270, 2880, 1620), 1920, 1080, 240, 870);
+        Assert.Equal((660, 1575), p); // 300+240*1.5, 270+870*1.5
+    }
+
+    [Fact]
+    public void MousePathConfig_VerifyTolerance_DefaultsToSix()
+    {
+        Assert.Equal(6, new MousePathConfig().VerifyTolerancePx);
     }
 }

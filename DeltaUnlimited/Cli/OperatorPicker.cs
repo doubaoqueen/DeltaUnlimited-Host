@@ -35,16 +35,31 @@ public static class OperatorPicker
         var area = table.Layout.AvatarArea is { Count: 4 }
             ? table.Layout.AvatarArea
             : new List<int> { 79, 787, 1734, 152 };
-        InputService.MoveHumanized(area[0] + area[2] / 2, area[1] + area[3] / 2);
 
         var strip = table.Layout.LabelStrip is { Count: 4 }
             ? table.Layout.LabelStrip.ToArray()
             : new[] { 30, 730, 1860, 90 };
 
+        CaptureService.LogWindowAnchor(hwnd, runtime.DesignWidth, runtime.DesignHeight);
+
         int maxTries = 24;
         int direction = -120; // 先向一个方向翻；过半未果自动反向（侦察在右侧，滚动状态未知时双保险）
         for (int t = 0; t < maxTries; t++)
         {
+            var client = CaptureService.GetClientScreenRect(hwnd);
+            if (client is null)
+            {
+                Console.WriteLine("  ⚠️ 干员选择中窗口不可用（最小化？），保持当前干员");
+                return false;
+            }
+            // 设计坐标 → 屏幕绝对坐标（窗口位置/DPI 缩放随时可能变化，每次循环重取客户区）
+            (int X, int Y) ToScreen(double dx, double dy) =>
+                CaptureService.MapDesignToScreen(client.Value, runtime.DesignWidth, runtime.DesignHeight, dx, dy);
+
+            // 滚轮就位：光标移到头像区中心（屏幕坐标）
+            var (acx, acy) = ToScreen(area[0] + area[2] / 2.0, area[1] + area[3] / 2.0);
+            InputService.MoveHumanized(acx, acy);
+
             using var frame = CaptureService.CaptureWindowMat(winKeyword);
             using var norm = FrameTools.Normalize(frame, runtime.DesignWidth, runtime.DesignHeight);
 
@@ -58,8 +73,13 @@ public static class OperatorPicker
                 var (ax, ay) = table.Layout.ComputeAvatarPoint(hit, pick.Index);
                 if (ax >= 60 && ax <= 1900)
                 {
-                    InputService.ClickAt(ax, ay);
-                    Console.WriteLine($"  ✅ 干员 “{pick.Type}” 第 {pick.Index + 1} 位：标签 x={labelX} → 头像 ({ax},{ay}) 已点击");
+                    var (sx, sy) = ToScreen(ax, ay);
+                    if (!InputService.ClickAt(sx, sy))
+                    {
+                        Console.WriteLine($"  ⚠️ 干员 “{pick.Type}” 点击被安全网拦截（目标设计 ({ax},{ay}) → 屏幕 ({sx},{sy})），保持当前干员");
+                        return false;
+                    }
+                    Console.WriteLine($"  ✅ 干员 “{pick.Type}” 第 {pick.Index + 1} 位：标签 x={labelX} → 头像设计 ({ax},{ay}) → 屏幕 ({sx},{sy}) 已点击");
                     return true;
                 }
                 Console.WriteLine($"  🔄 标签已见（x={labelX}）但目标头像越界（{ax}），继续翻动");
