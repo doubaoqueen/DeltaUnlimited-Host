@@ -29,6 +29,11 @@ public sealed class ScreenDef
 
     [JsonPropertyName("actions")]
     public List<string> Actions { get; set; } = new();
+
+    /// <summary>自动关闭键：检测到该界面（弹层类）时自动按下该键关闭并重新识别（如 space_continue → "space"）。
+    /// 用于"空格继续"类通用弹层（仓库升级完成/广告/任务领取等），避免链路被非主线弹层卡死。</summary>
+    [JsonPropertyName("dismiss")]
+    public string? Dismiss { get; set; }
 }
 
 /// <summary>识别标记：type = template / ocr（后续扩展 color）。

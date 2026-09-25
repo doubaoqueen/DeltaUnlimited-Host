@@ -43,6 +43,15 @@ public class DataStoreTests
     }
 
     [Fact]
+    public void Screens_SpaceContinue_HasDismissKey()
+    {
+        // 仓库升级完成/广告等"空格继续"弹层必须带自动关闭键，链路等待/分流处检测到即按键关闭（2026-09-26 真机卡壳修复）
+        var table = CreateStore().LoadScreens();
+        Assert.True(table.Screens.ContainsKey("space_continue"));
+        Assert.Equal("space", table.Screens["space_continue"].Dismiss);
+    }
+
+    [Fact]
     public void Screens_PlazaReady_RequiresAllKeywords_ToAvoidLoadoutCrossTalk()
     {
         // 防串台回归：'配装' 会严格命中配装界面的 '确认配装' 按钮，

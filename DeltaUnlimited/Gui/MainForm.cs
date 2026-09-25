@@ -43,8 +43,8 @@ public sealed class MainForm : Form
 
         Text = "DeltaUnlimited 控制面板";
         StartPosition = FormStartPosition.CenterScreen;
-        Size = new Size(840, 580);
-        MinimumSize = new Size(640, 420);
+        Size = new Size(1180, 760);
+        MinimumSize = new Size(940, 600);
         Icon = AppIconFactory.Create();
 
         // ---- 日志窗（先加入，Dock.Fill 占剩余空间）----
@@ -68,38 +68,38 @@ public sealed class MainForm : Form
         Controls.Add(status);
 
         // ---- 暂停面板（半自动人工确认点，非模态：急停按钮始终可用）----
-        _pausePanel = new Panel { Dock = DockStyle.Top, Height = 52, Visible = false, BackColor = Color.FromArgb(58, 48, 18) };
-        var abortButton = new Button { Text = "⛔ 中止链路", Dock = DockStyle.Right, Width = 110, ForeColor = Color.Red };
+        _pausePanel = new Panel { Dock = DockStyle.Top, Height = 60, Visible = false, BackColor = Color.FromArgb(58, 48, 18) };
+        var abortButton = new Button { Text = "⛔ 中止链路", Dock = DockStyle.Right, Width = 130, ForeColor = Color.Red, Font = new Font(Font.FontFamily, 10f) };
         abortButton.Click += (_, _) => AbortFromPause();
-        var contButton = new Button { Text = "▶ 继续", Dock = DockStyle.Right, Width = 90 };
+        var contButton = new Button { Text = "▶ 继续", Dock = DockStyle.Right, Width = 110, Font = new Font(Font.FontFamily, 10f) };
         contButton.Click += (_, _) => { PauseGate.Resume(); _pausePanel.Visible = false; };
-        _pauseLabel = new Label { Text = "", Dock = DockStyle.Fill, ForeColor = Color.FromArgb(255, 220, 120), TextAlign = ContentAlignment.MiddleLeft };
+        _pauseLabel = new Label { Text = "", Dock = DockStyle.Fill, ForeColor = Color.FromArgb(255, 220, 120), TextAlign = ContentAlignment.MiddleLeft, Font = new Font(Font.FontFamily, 10f) };
         _pausePanel.Controls.Add(_pauseLabel);
         _pausePanel.Controls.Add(abortButton);
         _pausePanel.Controls.Add(contButton);
         Controls.Add(_pausePanel);
 
-        // ---- 顶部控制区（最后加入 → 停靠最顶部）----
-        var top = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 44, Padding = new Padding(8, 7, 8, 0), WrapContents = false };
-        top.Controls.Add(new Label { Text = "工作流", AutoSize = true, Margin = new Padding(0, 6, 4, 0) });
-        _workflowBox = new ComboBox { Width = 200, DropDownStyle = ComboBoxStyle.DropDownList };
+        // ---- 顶部控制区（最后加入 → 停靠最顶部；后续新按钮直接往里加，宽度自动流式排列）----
+        var top = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 58, Padding = new Padding(12, 10, 12, 0), WrapContents = false };
+        top.Controls.Add(new Label { Text = "工作流", AutoSize = true, Margin = new Padding(0, 8, 6, 0), Font = new Font(Font.FontFamily, 10f) });
+        _workflowBox = new ComboBox { Width = 240, DropDownStyle = ComboBoxStyle.DropDownList, Font = new Font(Font.FontFamily, 10f) };
         foreach (var wf in WorkflowCatalog.List(repoRoot)) _workflowBox.Items.Add(wf);
         int defIdx = _workflowBox.Items?.IndexOf("enter_match.json") ?? -1;
         if (defIdx >= 0) _workflowBox.SelectedIndex = defIdx;
         else if ((_workflowBox.Items?.Count ?? 0) > 0) _workflowBox.SelectedIndex = 0;
         top.Controls.Add(_workflowBox);
 
-        top.Controls.Add(new Label { Text = "模式", AutoSize = true, Margin = new Padding(14, 6, 4, 0) });
-        _modeBox = new ComboBox { Width = 176, DropDownStyle = ComboBoxStyle.DropDownList };
+        top.Controls.Add(new Label { Text = "模式", AutoSize = true, Margin = new Padding(18, 8, 6, 0), Font = new Font(Font.FontFamily, 10f) });
+        _modeBox = new ComboBox { Width = 210, DropDownStyle = ComboBoxStyle.DropDownList, Font = new Font(Font.FontFamily, 10f) };
         _modeBox.Items.AddRange(new object[] { "半自动（暂停点人工确认）", "全自动（跳过暂停点）" });
         _modeBox.SelectedIndex = 0;
         top.Controls.Add(_modeBox);
 
-        _startButton = new Button { Text = "▶ 开始", Width = 96, Height = 30, Margin = new Padding(14, 0, 0, 0) };
+        _startButton = new Button { Text = "▶ 开始", Width = 140, Height = 42, Margin = new Padding(24, 0, 0, 0), Font = new Font(Font.FontFamily, 11f, FontStyle.Bold) };
         _startButton.Click += (_, _) => StartChain();
-        _stopButton = new Button { Text = "⛔ 急停", Width = 96, Height = 30, Enabled = false, ForeColor = Color.Red, Margin = new Padding(8, 0, 0, 0) };
+        _stopButton = new Button { Text = "⛔ 急停", Width = 140, Height = 42, Enabled = false, ForeColor = Color.Red, Margin = new Padding(10, 0, 0, 0), Font = new Font(Font.FontFamily, 11f, FontStyle.Bold) };
         _stopButton.Click += (_, _) => CommandUtil.RequestStop();
-        var clearButton = new Button { Text = "清空日志", Width = 96, Height = 30, Margin = new Padding(8, 0, 0, 0) };
+        var clearButton = new Button { Text = "清空日志", Width = 110, Height = 42, Margin = new Padding(10, 0, 0, 0), Font = new Font(Font.FontFamily, 10f) };
         clearButton.Click += (_, _) => { _logBox.Clear(); };
         top.Controls.Add(_startButton);
         top.Controls.Add(_stopButton);

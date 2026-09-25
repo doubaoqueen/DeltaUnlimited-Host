@@ -81,7 +81,7 @@ public static class ChainCommand
                             break;
                         }
 
-                        ok = WaitForScreen(runtime, screens, repoRoot, s.ExpectScreen, timeoutMs);
+                        ok = WaitForScreen(runtime, screens, repoRoot, hwnd, s.ExpectScreen, timeoutMs);
                         if (ok)
                         {
                             Logger.Info($"✅ 已进入预期界面 {s.ExpectScreen}");
@@ -126,7 +126,7 @@ public static class ChainCommand
                     int timeoutMs = s.TimeoutMs ?? 120000;
                     bool absent = s.Absent == true;
                     Console.WriteLine($"  ⏳ 等待界面 {want} {(absent ? "消失" : "出现")}（最长 {timeoutMs}ms）...");
-                    bool reached = WaitForScreenState(runtime, screens, repoRoot, want, timeoutMs, absent);
+                    bool reached = WaitForScreenState(runtime, screens, repoRoot, hwnd, want, timeoutMs, absent);
                     Logger.Info($"等待界面 {want}{(absent ? "消失" : "出现")}: {(reached ? "达成" : "超时")}");
                     if (!reached)
                     {
@@ -312,6 +312,16 @@ public static class ChainCommand
                     Console.WriteLine($"  🔀 界面分流: 当前 {(got == "" ? "unknown" : got)}{amb}（置信度 {guess?.Confidence:F3}）");
                     Logger.Info($"switch_screen: 当前 {(got == "" ? "unknown" : got)}{amb}");
 
+                    // 弹层自动关闭：检测到带 dismiss 键的界面（空格继续类通用弹层）→ 按键关闭 → 重跑本步骤重识别
+                    if (got != "" && screens.Screens.TryGetValue(got, out var gotDef) && !string.IsNullOrEmpty(gotDef.Dismiss))
+                    {
+                        Console.WriteLine($"  ⌨ 界面 {got} 带自动关闭键 “{gotDef.Dismiss}”，按下后重新识别");
+                        Logger.Info($"自动关闭弹层 {got}（按 {gotDef.Dismiss}）");
+                        InputService.EnsureForeground(hwnd);
+                        InputService.PressKey(gotDef.Dismiss);
+                        continue;
+                    }
+
                     bool defaultHit = false;
                     string? target = null;
                     if (got != "" && s.Branches is not null && s.Branches.TryGetValue(got, out var b))
@@ -368,11 +378,12 @@ public static class ChainCommand
     }
 
     /// <summary>轮询等待目标界面出现（expect_screen 用），超时返回 false。</summary>
-    private static bool WaitForScreen(RuntimeConfig runtime, ScreenTable screens, string repoRoot, string want, int timeoutMs)
-        => WaitForScreenState(runtime, screens, repoRoot, want, timeoutMs, wantAbsent: false);
+    private static bool WaitForScreen(RuntimeConfig runtime, ScreenTable screens, string repoRoot, IntPtr hwnd, string want, int timeoutMs)
+        => WaitForScreenState(runtime, screens, repoRoot, hwnd, want, timeoutMs, wantAbsent: false);
 
-    /// <summary>轮询等待目标界面出现/消失（wait_screen 用），超时返回 false。</summary>
-    private static bool WaitForScreenState(RuntimeConfig runtime, ScreenTable screens, string repoRoot, string want, int timeoutMs, bool wantAbsent)
+    /// <summary>轮询等待目标界面出现/消失（wait_screen 用），超时返回 false。
+    /// 等待期间若检测到带 dismiss 键的弹层界面（空格继续类）→ 自动按键关闭后继续轮询（不消耗额外超时）。</summary>
+    private static bool WaitForScreenState(RuntimeConfig runtime, ScreenTable screens, string repoRoot, IntPtr hwnd, string want, int timeoutMs, bool wantAbsent)
     {
         var deadline = DateTime.Now.AddMilliseconds(timeoutMs);
         int poll = runtime.PollIntervalMs > 0 ? runtime.PollIntervalMs : 600;
@@ -393,6 +404,18 @@ public static class ChainCommand
             }
             bool hit = guess?.Name == want;
             if (hit != wantAbsent) return true; // 出现且要出现 / 消失且要消失
+
+            // 弹层自动关闭：非目标界面且带 dismiss 键 → 按键关闭后继续等待（如仓库升级完成弹窗挡住 plaza_ready）
+            if (!hit && got != "" && screens.Screens.TryGetValue(got, out var gotDef) && !string.IsNullOrEmpty(gotDef.Dismiss))
+            {
+                Console.WriteLine($"  ⌨ 等待期间检测到弹层 {got}，按 “{gotDef.Dismiss}” 关闭后继续等待 {want}");
+                Logger.Info($"等待 {want} 期间自动关闭弹层 {got}");
+                InputService.EnsureForeground(hwnd);
+                InputService.PressKey(gotDef.Dismiss);
+                lastGot = ""; // 下次轮询强制打日志，观察弹层是否关闭
+                Thread.Sleep(200);
+                continue;
+            }
             Thread.Sleep(poll);
         }
         return false;
