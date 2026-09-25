@@ -20,6 +20,7 @@ public static class InputService
     private const uint MOUSEEVENTF_MOVE = 0x0001;
     private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
     private const uint MOUSEEVENTF_LEFTUP = 0x0004;
+    private const uint MOUSEEVENTF_WHEEL = 0x0800;
     private const uint MOUSEEVENTF_RIGHTDOWN = 0x0008;
     private const uint MOUSEEVENTF_RIGHTUP = 0x0010;
     private const uint MOUSEEVENTF_MIDDLEDOWN = 0x0020;
@@ -61,6 +62,18 @@ public static class InputService
 
     /// <summary>绝对定位：SendInput 归一化坐标（0-65535），不受鼠标加速影响。</summary>
     public static void MoveAbsoluteTo(int screenX, int screenY) => SendAbsolute(screenX, screenY);
+
+    /// <summary>滚轮滚动：delta 为 ±120 的整数倍（正=向上，负=向下；滚轮作用于光标所在区域）。</summary>
+    public static void ScrollWheel(int delta)
+    {
+        var input = new INPUT
+        {
+            type = INPUT_MOUSE,
+            mi = new MOUSEINPUT { dx = 0, dy = 0, mouseData = (uint)delta, dwFlags = MOUSEEVENTF_WHEEL, time = 0, dwExtraInfo = IntPtr.Zero }
+        };
+        Send(ref input);
+        Console.WriteLine($"[Input] 滚轮 {delta}");
+    }
 
     /// <summary>拟人化移动鼠标到屏幕坐标：随机弧线 + 缓动 + 过冲 + 抖动，全程绝对坐标（不受系统指针加速影响），
     /// 路径末点精确等于目标（无需再“钉”一次）。参数来自 runtime.json 的 humanizer.mouse。</summary>

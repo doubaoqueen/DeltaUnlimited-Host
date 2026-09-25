@@ -48,6 +48,7 @@ try
         case "tplprobe": TplProbeCommand.Run(root, args); break;
         case "overlay": OverlayCommand.Run(store, root); break;
         case "mousetest": MouseTestCommand.Run(args); break;
+        case "clickat": ClickAtCommand.Run(args); break;
         case "windows": WindowsCommand.Run(); break;
         default: Usage.Print(); break;
     }
