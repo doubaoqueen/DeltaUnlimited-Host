@@ -281,6 +281,25 @@ public static class ChainCommand
                     continue;
                 }
 
+                case "pick_operator":
+                {
+                    // 干员选择（15s 倒计时内）：按 operator_presets.map_operators 选择；未配置则跳过保持当前
+                    var opTable = new DataStore(repoRoot).LoadOperatorPresets();
+                    OperatorPick? pick = null;
+                    if (opTable.MapOperators.TryGetValue("零号大坝", out var p)) pick = p;
+                    else if (opTable.MapOperators.TryGetValue("default", out p)) pick = p;
+                    if (pick is null)
+                    {
+                        Console.WriteLine("  ℹ 未配置干员选择（operator_presets.map_operators），保持当前干员，等待倒计时自动开局");
+                        Logger.Info("pick_operator: 未配置，跳过");
+                        break;
+                    }
+                    InputService.EnsureForeground(hwnd);
+                    bool ok = OperatorPicker.TryPick(hwnd, winKeyword, runtime, opTable, pick);
+                    Logger.Info($"pick_operator: {pick.Type} #{pick.Index} {(ok ? "点击完成" : "未找到目标（保持当前干员）")}");
+                    break;
+                }
+
                 default:
                     throw new InvalidDataException($"未知步骤 op: {s.Op}");
             }
@@ -384,6 +403,9 @@ public static class ChainCommand
                         }
                     }
                     break;
+
+                case "pick_operator":
+                    break; // 无必填字段（读 operator_presets 配置，未配置则跳过）
             }
 
             if (!string.IsNullOrEmpty(s.JumpTo) && chain.Steps.All(x => x.Id != s.JumpTo))

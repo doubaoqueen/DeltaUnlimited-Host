@@ -1,16 +1,18 @@
 {
   "schema_version": 1,
-  "说明": "干员选择预设（预留，待标定）：map_operators=地图名→干员（type 突击/支援/工程/侦察，index 类型内序号 0=第一个）。layout=布局标定：type_labels 每类标签的 OCR 识别区（区域路径，全帧会丢字）与标签中心 x（头像列锚点）；avatar_first_y=每列第一个头像中心 y；avatar_spacing=同类头像纵向间距；depart_button=出击按钮坐标。选择方式=类型标签 OCR 锚定列 x + 固定间距算头像位置，无滚轮。维护：游戏新增干员=类型内追加（已有序号不变）；新增类型=加一行锚点。实测锚点（2026-09-24 OperatorBeginTemp）：突击≈(98,767) 支援≈(563,770) 工程≈(1027,771)；侦察标签 OCR 读不出、出击按钮无文字，均待用户标定。",
+  "说明": "干员选择预设：map_operators=地图名(或 default)→干员（type 突击/支援/工程/侦察，index 类型内序号 0=第一个；counts：突击4/支援4/工程5/侦察4）。选择算法：运行时 OCR 标签带（label_strip）找目标类型标签中心 → 头像点=(标签x+first_avatar_offset+index*avatar_spacing, avatar_first_y)；目标越界/标签不可见→光标移到头像区(avatar_area)滚轮翻动后重识别（方向自动翻转）。⚠️ 无出击按钮：右上角 15s 倒计时自动开局，选完即收工；未配置干员=不选不动（保持当前）。实测锚点（2026-09-24 OperatorBeginTemp）：突击标签≈(98,767)、支援≈(563,770)、工程≈(1027,771)、侦察初始≈(1600,779)（滚到底后≈(1393,779)，见 OperatorEndingTemp）；头像 100x132、同类间距 111、类型间距 464、头像中心 y=873、标签→首头像偏移 33；头像区(79,787)-(1813,939)。滚动位移无需标定——靠标签定位。",
   "map_operators": {},
   "layout": {
-    "avatar_first_y": 0,
-    "avatar_spacing": 0,
-    "depart_button": { "x": 0, "y": 0 },
+    "avatar_first_y": 873,
+    "avatar_spacing": 111,
+    "first_avatar_offset": 33,
+    "avatar_area": [79, 787, 1734, 152],
+    "label_strip": [30, 730, 1860, 90],
     "type_labels": {
-      "突击": { "region": [30, 730, 280, 80], "label_x": 98 },
-      "支援": { "region": [460, 730, 200, 80], "label_x": 563 },
-      "工程": { "region": [920, 730, 220, 80], "label_x": 1027 },
-      "侦察": { "region": [1350, 730, 500, 80], "label_x": 0 }
+      "突击": { "region": [30, 730, 400, 90], "label_x": 98, "count": 4 },
+      "支援": { "region": [400, 730, 420, 90], "label_x": 563, "count": 4 },
+      "工程": { "region": [820, 730, 420, 90], "label_x": 1027, "count": 5 },
+      "侦察": { "region": [1240, 730, 680, 90], "label_x": 1600, "count": 4 }
     }
   }
 }

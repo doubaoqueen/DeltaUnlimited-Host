@@ -165,6 +165,7 @@ public class DataStoreTests
         Assert.Contains(chain.Steps, s => s.Op == "if_ocr" && s.Keywords is { Count: > 0 });
         Assert.Contains(chain.Steps, s => s.Op == "if_ocr" && s.Keywords!.Contains("未装配") && s.MinCount == 4);
         Assert.Contains(chain.Steps, s => s.Op == "mark_unknown");
+        Assert.Contains(chain.Steps, s => s.Op == "pick_operator");
         Assert.Contains(chain.Steps, s => s.Op == "wait_screen" && s.Screen == "char_select");
     }
 
@@ -191,11 +192,27 @@ public class DataStoreTests
     [Fact]
     public void OperatorPresets_Loads_EmptyStub()
     {
-        // 干员选择预留：schema 已建、map_operators 为空即可加载（布局锚点待用户标定后填充）
+        // 干员选择预留：schema 已建、map_operators 为空即可加载（布局锚点已按 2026-09-24 实测标定）
         var table = CreateStore().LoadOperatorPresets();
         Assert.Equal(1, table.SchemaVersion);
         Assert.NotNull(table.MapOperators);
-        Assert.NotNull(table.Layout.TypeLabels);
+        Assert.Equal(111, table.Layout.AvatarSpacing);
+        Assert.Equal(873, table.Layout.AvatarFirstY);
+        Assert.Equal(33, table.Layout.FirstAvatarOffset);
+        Assert.True(table.Layout.TypeLabels.ContainsKey("侦察"));
+        Assert.Equal(4, table.Layout.TypeLabels["突击"].Count);
+    }
+
+    [Fact]
+    public void OperatorLayout_ComputeAvatarPoint_MatchesMeasured()
+    {
+        // 用户实测（OperatorBeginTemp）：突击1 红狼 (131,873)、突击2 威龙 (242,873)、支援1 (595,873)
+        var l = CreateStore().LoadOperatorPresets().Layout;
+        Assert.Equal((131, 873), l.ComputeAvatarPoint(l.TypeLabels["突击"], 0));
+        Assert.Equal((242, 873), l.ComputeAvatarPoint(l.TypeLabels["突击"], 1));
+        var s = l.ComputeAvatarPoint(l.TypeLabels["支援"], 0);
+        Assert.InRange(s.X, 590, 600);
+        Assert.Equal(873, s.Y);
     }
 
     [Fact]
