@@ -54,6 +54,7 @@ public sealed class DataStore
     public ZeroDamPoints LoadZeroDamPoints() => LoadJson<ZeroDamPoints>("data/zero_dam_points.json");
     public LoadoutPresetTable LoadLoadoutPresets() => LoadJson<LoadoutPresetTable>("data/loadout_preset.json");
     public ItemCatalogTable LoadItemCatalog() => LoadJson<ItemCatalogTable>("data/item_catalog.json");
+    public OperatorPresetTable LoadOperatorPresets() => LoadJson<OperatorPresetTable>("data/operator_presets.json");
     public Workflow LoadWorkflow(string file) => LoadJson<Workflow>($"workflows/{file}");
     public RuntimeConfig LoadRuntime() => LoadJson<RuntimeConfig>("data/runtime.json");
     public Chain LoadChain(string file) => LoadJson<Chain>($"workflows/{file}");

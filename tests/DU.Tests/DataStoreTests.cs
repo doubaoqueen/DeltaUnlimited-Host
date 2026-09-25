@@ -189,6 +189,16 @@ public class DataStoreTests
     }
 
     [Fact]
+    public void OperatorPresets_Loads_EmptyStub()
+    {
+        // 干员选择预留：schema 已建、map_operators 为空即可加载（布局锚点待用户标定后填充）
+        var table = CreateStore().LoadOperatorPresets();
+        Assert.Equal(1, table.SchemaVersion);
+        Assert.NotNull(table.MapOperators);
+        Assert.NotNull(table.Layout.TypeLabels);
+    }
+
+    [Fact]
     public void Zones_ContainsBottomRight()
     {
         var zones = CreateStore().LoadZones();

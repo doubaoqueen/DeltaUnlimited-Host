@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "说明": "干员选择预设（预留，待标定）：map_operators=地图名→干员（type 突击/支援/工程/侦察，index 类型内序号 0=第一个）。layout=布局标定：type_labels 每类标签的 OCR 识别区（区域路径，全帧会丢字）与标签中心 x（头像列锚点）；avatar_first_y=每列第一个头像中心 y；avatar_spacing=同类头像纵向间距；depart_button=出击按钮坐标。选择方式=类型标签 OCR 锚定列 x + 固定间距算头像位置，无滚轮。维护：游戏新增干员=类型内追加（已有序号不变）；新增类型=加一行锚点。实测锚点（2026-09-24 OperatorBeginTemp）：突击≈(98,767) 支援≈(563,770) 工程≈(1027,771)；侦察标签 OCR 读不出、出击按钮无文字，均待用户标定。",
+  "map_operators": {},
+  "layout": {
+    "avatar_first_y": 0,
+    "avatar_spacing": 0,
+    "depart_button": { "x": 0, "y": 0 },
+    "type_labels": {
+      "突击": { "region": [30, 730, 280, 80], "label_x": 98 },
+      "支援": { "region": [460, 730, 200, 80], "label_x": 563 },
+      "工程": { "region": [920, 730, 220, 80], "label_x": 1027 },
+      "侦察": { "region": [1350, 730, 500, 80], "label_x": 0 }
+    }
+  }
+}
