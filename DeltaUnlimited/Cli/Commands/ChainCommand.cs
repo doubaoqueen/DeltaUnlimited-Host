@@ -47,8 +47,11 @@ public static class ChainCommand
         var defaultVisits = new Dictionary<int, int>(); // switch_screen 熔断计数：default 分支连续触发次数（按步骤索引）
 
         int i = 0;
+        try
+        {
         while (i < chain.Steps.Count)
         {
+            CommandUtil.AbortIfStopped(); // 急停检查点：每个步骤边界
             var s = chain.Steps[i];
             Console.WriteLine($"\n[步骤 {i + 1}/{chain.Steps.Count}] {s.Op}");
             Logger.Info($"链路 {chainFile} 步骤 {i + 1}/{chain.Steps.Count} {s.Op}");
@@ -217,20 +220,14 @@ public static class ChainCommand
                     Logger.Warn($"未知界面已标记: {png}（词表 {txt}）");
                     Console.WriteLine($"  🏷 未知界面已标记: {png}");
                     Console.WriteLine($"     候选与词表: {txt}");
-                    if (!auto)
-                    {
-                        Console.WriteLine($"  ⏸ {s.Message ?? "人工处理后回车继续（部分界面需长按空格跳过）"} —— 回车继续");
-                        Console.ReadLine();
-                    }
+                    if (!auto && !CommandUtil.WaitForResume(s.Message ?? "人工处理后继续（部分界面需长按空格跳过）"))
+                        throw new ChainStoppedException();
                     break;
                 }
 
                 case "pause":
-                    if (!auto)
-                    {
-                        Console.WriteLine($"  ⏸ {s.Message ?? "人工确认点"} —— 按回车继续（Ctrl+C 中止）");
-                        Console.ReadLine();
-                    }
+                    if (!auto && !CommandUtil.WaitForResume(s.Message ?? "人工确认点"))
+                        throw new ChainStoppedException();
                     break;
 
                 case "if_template":
@@ -332,9 +329,9 @@ public static class ChainCommand
                         defaultVisits[i] = defaultVisits.GetValueOrDefault(i) + 1;
                         if (defaultVisits[i] > (s.MaxLoops ?? 3))
                         {
-                            Console.WriteLine($"  ⛔ 分流熔断：default 分支连续 {s.MaxLoops ?? 3} 圈，人工确认后回车继续（计数重置）");
                             Logger.Warn($"switch_screen 熔断（步骤 {i + 1}）：default 连续 {s.MaxLoops ?? 3} 圈");
-                            if (!auto) Console.ReadLine();
+                            if (!auto && !CommandUtil.WaitForResume($"分流熔断：default 分支连续 {s.MaxLoops ?? 3} 圈，人工确认后继续（计数重置）"))
+                                throw new ChainStoppedException();
                             defaultVisits[i] = 0;
                         }
                     }
@@ -361,6 +358,13 @@ public static class ChainCommand
             i++;
         }
         Console.WriteLine($"\n🎉 链路 {chain.Name} 执行完成");
+        }
+        catch (ChainStoppedException)
+        {
+            InputService.ReleaseAllHeldKeys();
+            Console.WriteLine("\n⏹ 链路已停止（急停/人工中止）——所有按键已释放");
+            Logger.Warn("链路已停止（急停/人工中止）");
+        }
     }
 
     /// <summary>轮询等待目标界面出现（expect_screen 用），超时返回 false。</summary>
@@ -375,6 +379,7 @@ public static class ChainCommand
         string lastGot = "";
         while (DateTime.Now < deadline)
         {
+            CommandUtil.AbortIfStopped(); // 急停检查点：每个轮询周期
             // 先识别后睡（每次等待不白花一个轮询间隔）
             using var frame = CaptureService.CaptureWindowMat(runtime.WindowKeyword, raiseAndWait: false);
             using var norm = FrameTools.Normalize(frame, runtime.DesignWidth, runtime.DesignHeight);

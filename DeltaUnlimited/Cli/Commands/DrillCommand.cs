@@ -36,10 +36,14 @@ public static class DrillCommand
         Console.WriteLine("2 秒后开始；Ctrl+C 随时急停；若贴墙/卡住会自动重试后中止。请盯紧屏幕！");
         Thread.Sleep(2000);
 
+        try
+        {
         for (int round = 1; round <= rounds; round++)
         {
+            CommandUtil.AbortIfStopped(); // 急停检查点：每圈
             for (int side = 1; side <= 4; side++)
             {
+                CommandUtil.AbortIfStopped(); // 急停检查点：每边
                 Console.WriteLine($"\n[第 {round}/{rounds} 圈 · 边 {side}/4]");
                 if (!MotionVerified(hwnd, winKeyword, repoRoot, "冲刺前进", () => InputService.HoldKeys(new[] { fwdKey, sprintKey }, fwdMs), settleMs, minScore))
                     throw new InvalidOperationException("前进两次验证失败，已自动中止（画面未变化：贴墙了？焦点丢了？）");
@@ -49,6 +53,11 @@ public static class DrillCommand
             Console.WriteLine($"\n✅ 第 {round} 圈完成");
         }
         Console.WriteLine($"\n🎉 自主行进循环完成 {rounds} 圈，共 {rounds * 4} 段动作全部帧差验证通过");
+        }
+        catch (ChainStoppedException)
+        {
+            Console.WriteLine("\n⛔ 手动急停：训练循环已中止");
+        }
     }
 
     /// <summary>执行一个动作并用帧差验证：失败自动重试一次（重新抢焦点），仍失败则留证据帧并返回 false。</summary>

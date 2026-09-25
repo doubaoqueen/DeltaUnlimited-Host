@@ -68,3 +68,6 @@ catch (Exception ex)
     Console.Error.WriteLine(ex.ToString());
     Environment.ExitCode = 1;
 }
+
+// 协作式急停（Ctrl+C）后优雅退出：保持传统退出码 130
+if (CommandUtil.StopRequested) Environment.ExitCode = 130;

@@ -76,6 +76,11 @@ public static class PatrolCommand
 
             while ((DateTime.Now - start).TotalSeconds < maxSeconds)
             {
+                if (CommandUtil.StopRequested)
+                {
+                    Console.WriteLine("\n⛔ 手动急停：巡逻已中止");
+                    break;
+                }
                 Thread.Sleep((int)sampleEveryMs);
                 // 首个采样带置顶等待；后续窗口已在前台，跳过置顶提速
                 Mat cur = CaptureService.CaptureWindowMat(winKeyword, prev is null);
@@ -114,6 +119,12 @@ public static class PatrolCommand
         {
             prev?.Dispose();
             InputService.ReleaseAllHeldKeys();
+        }
+
+        if (CommandUtil.StopRequested)
+        {
+            Console.WriteLine("⛔ 巡逻已急停（按键已释放）");
+            return;
         }
 
         double avg = samples > 0 ? diffSum / samples : 0;

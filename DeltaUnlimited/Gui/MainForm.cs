@@ -2,13 +2,15 @@ using System.Collections.Concurrent;
 using System.Drawing;
 using System.Text;
 using System.Windows.Forms;
+using DeltaUnlimited.Cli;
+using DeltaUnlimited.Cli.Commands;
 using DeltaUnlimited.Data;
 
 namespace DeltaUnlimited.Gui;
 
-/// <summary>主控制面板（G1 骨架）：工作流/模式选择、开始/急停（G2 接线，当前禁用并提示）、状态栏、
-/// 实时日志窗（封顶+自动滚屏+清空）与系统托盘（最小化/关闭收进托盘、双击恢复、右键菜单）。
-/// 红线：急停永远优先于一切自动化行为；日志窗只做展示，不阻塞链路线程。</summary>
+/// <summary>主控制面板（G2）：工作流/模式选择、开始/急停（后台线程执行链路 + 协作式急停）、
+/// 暂停面板（半自动人工确认点：继续/中止）、实时日志窗、系统托盘（收托盘/双击恢复/菜单/气泡通知）。
+/// 红线：急停永远优先——急停按钮/Ctrl+C/暂停面板"中止"都会释放所有按键并优雅收尾。</summary>
 public sealed class MainForm : Form
 {
     private const int LogMaxLines = 3000;
@@ -19,14 +21,20 @@ public sealed class MainForm : Form
     private readonly ConcurrentQueue<string> _logQueue = new();
     private readonly System.Windows.Forms.Timer _logTimer;
     private readonly NotifyIcon _tray;
+    private readonly ToolStripMenuItem _trayStart;
+    private readonly ToolStripMenuItem _trayStop;
     private readonly ComboBox _workflowBox;
     private readonly ComboBox _modeBox;
     private readonly Button _startButton;
     private readonly Button _stopButton;
     private readonly TextBox _logBox;
     private readonly ToolStripStatusLabel _statusLabel;
+    private readonly Panel _pausePanel;
+    private readonly Label _pauseLabel;
     private bool _reallyExit;
     private bool _trayHintShown;
+    private bool _running;
+    private volatile string _lastOutcome = "";
 
     public MainForm(DataStore store, string repoRoot)
     {
@@ -39,35 +47,7 @@ public sealed class MainForm : Form
         MinimumSize = new Size(640, 420);
         Icon = AppIconFactory.Create();
 
-        // ---- 顶部控制区 ----
-        var top = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 44, Padding = new Padding(8, 7, 8, 0), WrapContents = false };
-        top.Controls.Add(new Label { Text = "工作流", AutoSize = true, Margin = new Padding(0, 6, 4, 0) });
-        _workflowBox = new ComboBox { Width = 200, DropDownStyle = ComboBoxStyle.DropDownList };
-        foreach (var wf in WorkflowCatalog.List(repoRoot)) _workflowBox.Items.Add(wf);
-        int defIdx = _workflowBox.Items?.IndexOf("enter_match.json") ?? -1;
-        if (defIdx >= 0) _workflowBox.SelectedIndex = defIdx;
-        else if ((_workflowBox.Items?.Count ?? 0) > 0) _workflowBox.SelectedIndex = 0;
-        top.Controls.Add(_workflowBox);
-
-        top.Controls.Add(new Label { Text = "模式", AutoSize = true, Margin = new Padding(14, 6, 4, 0) });
-        _modeBox = new ComboBox { Width = 176, DropDownStyle = ComboBoxStyle.DropDownList };
-        _modeBox.Items.AddRange(new object[] { "半自动（暂停点人工确认）", "全自动（跳过暂停点）" });
-        _modeBox.SelectedIndex = 0;
-        top.Controls.Add(_modeBox);
-
-        _startButton = new Button { Text = "▶ 开始", Width = 96, Height = 30, Enabled = false, Margin = new Padding(14, 0, 0, 0) };
-        _stopButton = new Button { Text = "⛔ 急停", Width = 96, Height = 30, Enabled = false, ForeColor = Color.Red, Margin = new Padding(8, 0, 0, 0) };
-        var clearButton = new Button { Text = "清空日志", Width = 96, Height = 30, Margin = new Padding(8, 0, 0, 0) };
-        clearButton.Click += (_, _) => { _logBox.Clear(); _statusLabel.Text = "日志已清空"; };
-        var g2Tip = new ToolTip();
-        g2Tip.SetToolTip(_startButton, "G2 接线：后台线程执行链路 + 暂停点桥接（开发中）");
-        g2Tip.SetToolTip(_stopButton, "G2 接线：协作式停止标志（替代 Ctrl+C，释放所有按键）");
-        top.Controls.Add(_startButton);
-        top.Controls.Add(_stopButton);
-        top.Controls.Add(clearButton);
-        Controls.Add(top);
-
-        // ---- 日志窗 ----
+        // ---- 日志窗（先加入，Dock.Fill 占剩余空间）----
         _logBox = new TextBox
         {
             Dock = DockStyle.Fill,
@@ -83,21 +63,64 @@ public sealed class MainForm : Form
 
         // ---- 状态栏 ----
         var status = new StatusStrip();
-        _statusLabel = new ToolStripStatusLabel("就绪 — 开始/急停在 G2 接线中；双击托盘图标恢复窗口");
+        _statusLabel = new ToolStripStatusLabel("就绪 —— 选择工作流后点开始；急停随时有效");
         status.Items.Add(_statusLabel);
         Controls.Add(status);
+
+        // ---- 暂停面板（半自动人工确认点，非模态：急停按钮始终可用）----
+        _pausePanel = new Panel { Dock = DockStyle.Top, Height = 52, Visible = false, BackColor = Color.FromArgb(58, 48, 18) };
+        var abortButton = new Button { Text = "⛔ 中止链路", Dock = DockStyle.Right, Width = 110, ForeColor = Color.Red };
+        abortButton.Click += (_, _) => AbortFromPause();
+        var contButton = new Button { Text = "▶ 继续", Dock = DockStyle.Right, Width = 90 };
+        contButton.Click += (_, _) => { PauseGate.Resume(); _pausePanel.Visible = false; };
+        _pauseLabel = new Label { Text = "", Dock = DockStyle.Fill, ForeColor = Color.FromArgb(255, 220, 120), TextAlign = ContentAlignment.MiddleLeft };
+        _pausePanel.Controls.Add(_pauseLabel);
+        _pausePanel.Controls.Add(abortButton);
+        _pausePanel.Controls.Add(contButton);
+        Controls.Add(_pausePanel);
+
+        // ---- 顶部控制区（最后加入 → 停靠最顶部）----
+        var top = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 44, Padding = new Padding(8, 7, 8, 0), WrapContents = false };
+        top.Controls.Add(new Label { Text = "工作流", AutoSize = true, Margin = new Padding(0, 6, 4, 0) });
+        _workflowBox = new ComboBox { Width = 200, DropDownStyle = ComboBoxStyle.DropDownList };
+        foreach (var wf in WorkflowCatalog.List(repoRoot)) _workflowBox.Items.Add(wf);
+        int defIdx = _workflowBox.Items?.IndexOf("enter_match.json") ?? -1;
+        if (defIdx >= 0) _workflowBox.SelectedIndex = defIdx;
+        else if ((_workflowBox.Items?.Count ?? 0) > 0) _workflowBox.SelectedIndex = 0;
+        top.Controls.Add(_workflowBox);
+
+        top.Controls.Add(new Label { Text = "模式", AutoSize = true, Margin = new Padding(14, 6, 4, 0) });
+        _modeBox = new ComboBox { Width = 176, DropDownStyle = ComboBoxStyle.DropDownList };
+        _modeBox.Items.AddRange(new object[] { "半自动（暂停点人工确认）", "全自动（跳过暂停点）" });
+        _modeBox.SelectedIndex = 0;
+        top.Controls.Add(_modeBox);
+
+        _startButton = new Button { Text = "▶ 开始", Width = 96, Height = 30, Margin = new Padding(14, 0, 0, 0) };
+        _startButton.Click += (_, _) => StartChain();
+        _stopButton = new Button { Text = "⛔ 急停", Width = 96, Height = 30, Enabled = false, ForeColor = Color.Red, Margin = new Padding(8, 0, 0, 0) };
+        _stopButton.Click += (_, _) => CommandUtil.RequestStop();
+        var clearButton = new Button { Text = "清空日志", Width = 96, Height = 30, Margin = new Padding(8, 0, 0, 0) };
+        clearButton.Click += (_, _) => { _logBox.Clear(); };
+        top.Controls.Add(_startButton);
+        top.Controls.Add(_stopButton);
+        top.Controls.Add(clearButton);
+        Controls.Add(top);
 
         // ---- 系统托盘 ----
         _tray = new NotifyIcon { Icon = Icon, Text = "DeltaUnlimited", Visible = true };
         var menu = new ContextMenuStrip();
         var trayShow = new ToolStripMenuItem("显示面板");
         trayShow.Click += (_, _) => RestoreWindow();
-        var trayStart = new ToolStripMenuItem("开始 enter_match");
-        trayStart.Enabled = false; // G2 接线
+        _trayStart = new ToolStripMenuItem("开始 enter_match");
+        _trayStart.Click += (_, _) => { _workflowBox.SelectedItem = "enter_match.json"; StartChain(); };
+        _trayStop = new ToolStripMenuItem("急停");
+        _trayStop.Enabled = false;
+        _trayStop.Click += (_, _) => CommandUtil.RequestStop();
         var trayExit = new ToolStripMenuItem("退出");
         trayExit.Click += (_, _) => { _reallyExit = true; Close(); };
         menu.Items.Add(trayShow);
-        menu.Items.Add(trayStart);
+        menu.Items.Add(_trayStart);
+        menu.Items.Add(_trayStop);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(trayExit);
         _tray.ContextMenuStrip = menu;
@@ -107,6 +130,10 @@ public sealed class MainForm : Form
         FormClosing += OnFormClosing;
         Resize += (_, _) => { if (WindowState == FormWindowState.Minimized) HideToTray(); };
 
+        // ---- 暂停点桥接：链路线程阻塞在 PauseGate.Wait，本窗口按钮放行 ----
+        CommandUtil.PauseHandler = PauseGate.Wait;
+        PauseGate.PauseRequested += OnPauseRequested;
+
         // ---- 日志订阅（启动缓冲补发）与批量刷新定时器 ----
         _logHandler = line => _logQueue.Enqueue(line);
         ConsoleRelay.Subscribe(_logHandler);
@@ -114,6 +141,91 @@ public sealed class MainForm : Form
         _logTimer.Tick += (_, _) => FlushLogQueue();
         _logTimer.Start();
     }
+
+    // ===== 链路执行 =====
+
+    private void StartChain()
+    {
+        if (_running) return;
+        if (_workflowBox.SelectedItem is not string wf || wf.Length == 0)
+        {
+            _statusLabel.Text = "⚠️ 请先选择工作流";
+            return;
+        }
+        bool auto = _modeBox.SelectedIndex == 1;
+
+        CommandUtil.ResetStop();
+        SetRunning(true);
+        _statusLabel.Text = $"▶ 运行中：{wf}（{(auto ? "全自动" : "半自动")}）—— 急停随时有效";
+        _lastOutcome = "";
+
+        Task.Run(() =>
+        {
+            try
+            {
+                // 链路输出经 ConsoleRelay 进入日志窗；ChainCommand 内部处理急停与暂停点
+                ChainCommand.Run(_store, _repoRoot, new[] { "chain", wf, auto ? "--auto" : "" });
+                _lastOutcome = CommandUtil.StopRequested ? "已停止" : "完成";
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine(ex.ToString());
+                _lastOutcome = "失败";
+            }
+        }).ContinueWith(_ => OnChainEnded(), TaskScheduler.FromCurrentSynchronizationContext());
+    }
+
+    private void OnChainEnded()
+    {
+        SetRunning(false);
+        string msg = _lastOutcome switch
+        {
+            "完成" => "✅ 链路完成",
+            "已停止" => "⛔ 已急停（所有按键已释放）",
+            "失败" => "❌ 链路失败（详见日志）",
+            _ => "链路结束",
+        };
+        _statusLabel.Text = msg;
+        try { _tray.ShowBalloonTip(3000, "DeltaUnlimited", msg, ToolTipIcon.Info); } catch { }
+    }
+
+    private void AbortFromPause()
+    {
+        PauseGate.Interrupt();
+        CommandUtil.RequestStop();
+        _pausePanel.Visible = false;
+    }
+
+    /// <summary>暂停点事件在链路线程触发 → 转到 UI 线程显示暂停面板。</summary>
+    private void OnPauseRequested(string message)
+    {
+        if (IsDisposed || !IsHandleCreated)
+        {
+            PauseGate.Interrupt(); // 窗口已不在，放行中止，避免链路线程永久阻塞
+            return;
+        }
+        BeginInvoke(new Action(() =>
+        {
+            if (IsDisposed) return;
+            _pauseLabel.Text = message;
+            _pausePanel.Visible = true;
+            _statusLabel.Text = "⏸ 暂停点：请确认后继续或中止";
+        }));
+    }
+
+    private void SetRunning(bool running)
+    {
+        _running = running;
+        _startButton.Enabled = !running;
+        _stopButton.Enabled = running;
+        _workflowBox.Enabled = !running;
+        _modeBox.Enabled = !running;
+        _trayStart.Enabled = !running;
+        _trayStop.Enabled = running;
+        if (!running) _pausePanel.Visible = false;
+    }
+
+    // ===== 日志 =====
 
     private void FlushLogQueue()
     {
@@ -136,6 +248,8 @@ public sealed class MainForm : Form
         _logBox.ScrollToCaret();
     }
 
+    // ===== 托盘 =====
+
     private void HideToTray()
     {
         Hide();
@@ -143,7 +257,7 @@ public sealed class MainForm : Form
         {
             _trayHintShown = true;
             _tray.ShowBalloonTip(3000, "DeltaUnlimited 仍在托盘运行",
-                "双击托盘图标恢复窗口；右键菜单可退出。", ToolTipIcon.Info);
+                "双击托盘图标恢复窗口；右键菜单可开始/急停/退出。", ToolTipIcon.Info);
         }
     }
 
@@ -165,6 +279,9 @@ public sealed class MainForm : Form
     {
         if (disposing)
         {
+            if (_running) CommandUtil.RequestStop(); // 退出前释放一切按键
+            PauseGate.PauseRequested -= OnPauseRequested;
+            if (CommandUtil.PauseHandler == PauseGate.Wait) CommandUtil.PauseHandler = null;
             ConsoleRelay.Unsubscribe(_logHandler);
             _logTimer.Stop();
             _logTimer.Dispose();
