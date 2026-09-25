@@ -6,8 +6,9 @@ public static class Usage
     public static void Print()
     {
         Console.WriteLine("""
-            DeltaUnlimited 开发期 CLI
-              (无参数)                         Phase 0 数据层冒烟
+            DeltaUnlimited 开发期
+              (无参数 | gui)                 图形控制面板（托盘+启动/急停+日志窗）
+              smoke                           Phase 0 数据层冒烟
               annotate <元素名> [截图路径]       静态识别冒烟 → screenshots/annotated/
               capture  [标题关键字] [文件名]     截屏冒烟 → screenshots/captured/
               click <元素名> [窗口关键字]        真实点击（点前/点后自动截图，默认 3 秒倒计时）

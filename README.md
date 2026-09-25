@@ -4,16 +4,17 @@
 
 > ⚠️ 合规提示：任何游戏自动化都有违反用户协议、封号的风险。本项目仅用于个人学习与合规场景；请低频使用、风险自担。
 
-## 能力现状（v0.4.0，开发期 CLI）
+## 能力现状（v0.5.0）
 
 | 模块 | 能力 |
 |---|---|
 | 视觉识别 | 窗口自动定位 + GDI 截屏（1920×1080 基准缩放）；**OCR 为主（Windows.Media.Ocr）+ 模板匹配兜底 + 坐标最后兜底**的三层识别策略；界面识别表 `data/screens.json` 驱动（12 个界面真机标定：特勤处/模式选择/空格弹层/备战×2/地图池/部署面板/配装/入局提醒/匹配中/干员选择/结算画面），支持任意标记命中 + `require_all` 防串台 |
 | 输入 | SendInput 键鼠模拟：**拟人鼠标轨迹**（随机贝塞尔弧线 + 缓动 + 过冲收回 + 逐点抖动，全程绝对坐标不受系统指针加速影响）、点击、长按、组合键；所有拟人化参数在 `runtime.json → humanizer` 可调（⚠️ 铁律：参数必须保持随机范围，禁止固定值） |
-| 链路 | `enter_match.json` v5 状态机：**任意界面启动/中断恢复都自动接续**——模式选择→点烽火地带→选零号大坝→开始行动→确认配装→入局提醒→出发→匹配→干员选择；点击后 `expect_screen` 轮询验证、失败软跳转+人工确认；未知界面自动 `mark_unknown`（截图+OCR 词表留证）；结算画面自动空格跳过 |
-| 安全 | Ctrl+C 急停自动释放所有按键；所有未知/异常界面默认暂停人工确认（fail-open）；拟人化+低频使用 |
+| 链路 | `enter_match.json` v7 状态机：**任意界面启动/中断恢复都自动接续**——模式选择→点烽火地带→选零号大坝→开始行动→确认配装→入局提醒→出发→匹配→干员选择；点击后 `expect_screen` 轮询验证、失败软跳转+人工确认；未知界面自动 `mark_unknown`（截图+OCR 词表留证）；结算画面自动空格跳过 |
+| 安全 | 急停自动释放所有按键；点击落点校验（偏差超容差 → 钉正 → 仍偏放弃点击，fail-open）；窗口坐标换算（窗口化/DPI 缩放下点击精确）；所有未知/异常界面默认暂停人工确认 |
 | 可观测 | 控制台 + 按日滚动 `logs/status_*.log`；游戏画面上可拖动的悬浮状态面板（`overlay`）；`ocr`/`tplprobe` 诊断命令；链路每步截图留证 |
-| 里程碑 | ✅ 进场链路端到端真机验证：从任意界面一路自动运行到干员选择界面（2026-09-21） |
+| 图形界面 | **GUI 控制面板**（G1）：工作流/模式选择、实时日志窗（封顶+自动滚屏+清空）、系统托盘（最小化收托盘、双击恢复、右键菜单、气泡提示）；开始/急停在 G2 接线中 |
+| 里程碑 | ✅ 进场链路端到端真机验证（2026-09-21）；✅ 干员选择真机验证 + 窗口坐标换算/点击安全网修复（2026-09）；🚧 GUI 控制面板 G1（2026-09） |
 
 ## 设计哲学
 
@@ -25,8 +26,8 @@
 ## 目录结构
 
 ```
-DeltaUnlimited/       主程序（Program.cs + Cli/ + Capture/Vision/Input/Overlay/Data）
-tests/DU.Tests/       xUnit 测试（79 用例，视觉/输入/数据层回归）
+DeltaUnlimited/       主程序（Program.cs + Cli/ + Gui/ + Capture/Vision/Input/Overlay/Data）
+tests/DU.Tests/       xUnit 测试（93 用例，视觉/输入/数据/GUI 纯逻辑回归）
 data/                 运行时数据（elements/screens/zones/runtime/game_ops/loadout_preset 等）
 workflows/            链路定义（enter_match.json 等）
 assets/templates/     识别模板小图
@@ -37,7 +38,7 @@ docs/                 项目大纲/模块说明/界面元素清单/导航设计/
 
 ```
 dotnet build                # 仓库根（经 DeltaUnlimited.slnx；或 dotnet build DeltaUnlimited/DeltaUnlimited.csproj）
-dotnet test tests\DU.Tests  # 单元测试（79 用例）
+dotnet test tests\DU.Tests  # 单元测试（93 用例）
 ```
 
 ## CLI 命令速览
@@ -47,7 +48,8 @@ dotnet test tests\DU.Tests  # 单元测试（79 用例）
 > - 或先 `cd DeltaUnlimited`，再 `dotnet run -- <命令>`（下面示例用简写）
 
 ```
-dotnet run -- chain enter_match.json   # 进场链路 v5（任意界面启动，--auto 全自动）
+dotnet run -- gui                       # 图形控制面板（无参数/双击 exe 同）
+dotnet run -- chain enter_match.json    # 进场链路 v7（任意界面启动，--auto 全自动）
 dotnet run -- capture [关键字]          # 截屏冒烟
 dotnet run -- ocr <截图> [--region x y w h] [关键词...]   # OCR 诊断（词表+关键词验证）
 dotnet run -- tplprobe <截图> <模板> [阈值]               # 模板匹配诊断（置信度/位置）
@@ -71,8 +73,8 @@ dotnet run -- windows                   # 列出可见顶层窗口
 4. 长按空格 UI 变体（待坐标标定）
 5. 全局急停热键（F8，不依赖控制台焦点）
 6. 链路结构/速度优化：`switch_screen` 查表分流已完成（v7，112步→~64步）+ 同帧词表缓存（OCR 16次→~7次）；待真机量测单次识别 &lt;1.5s 后再降轮询/固定等待
-7. **GUI**：BetterGI 式桌面窗口 + 悬浮面板 + 一键开始/急停（远期 ComfyUI 节点编排器）；CLI 保留为诊断后门
+7. **GUI**：BetterGI 式桌面窗口 + 悬浮面板 + 一键开始/急停（远期 ComfyUI 节点编排器）；CLI 保留为诊断后门 —— 🚧 **G1 已落地**（主窗口+托盘+日志窗，2026-09）；G2 接线开始/急停（后台线程+协作式停止标志+暂停点桥接）；G3 打磨（气泡通知/状态/设置记忆）
 
 ## 版本
 
-当前 **v0.4.0**（csproj `<Version>` 维护，启动时打印）。变更历史见 git log。
+当前 **v0.5.0**（csproj `<Version>` 维护，启动时打印）。变更历史见 git log。
