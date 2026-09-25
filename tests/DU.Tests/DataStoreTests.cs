@@ -146,7 +146,7 @@ public class DataStoreTests
     public void Chain_EnterMatch_HasAutomatedSteps()
     {
         var chain = CreateStore().LoadChain("enter_match.json");
-        Assert.Equal("detect", chain.Steps[0].Op); // v4：状态驱动开头，启动即识别
+        Assert.Equal("switch_screen", chain.Steps[0].Op); // v7：一次识别查表分流开头
         // 特勤处等待时不得先卡人工暂停：首个 pause 必须出现在第一次按键(Tab)之后
         int firstKey = chain.Steps.FindIndex(s => s.Op == "key");
         int firstPause = chain.Steps.FindIndex(s => s.Op == "pause");
@@ -156,12 +156,14 @@ public class DataStoreTests
         Assert.Contains(chain.Steps, s => s.Op == "click_element" && s.Element == "wf_mode_card");
         Assert.Contains(chain.Steps, s => s.Op == "click_element" && s.Element == "confirm_loadout_button");
         Assert.Contains(chain.Steps, s => s.Op == "click_element" && s.Element == "continue_anyway_button");
-        Assert.Contains(chain.Steps, s => s.Op == "if_screen" && s.Screen == "map_pool");
+        var mainSwitch = chain.Steps.First(s => s.Op == "switch_screen");
+        Assert.True(mainSwitch.Branches!.ContainsKey("map_pool"));
+        Assert.True(mainSwitch.Branches!.ContainsKey("preset_select"));
+        Assert.Equal("unknown_tab", mainSwitch.Default);
         Assert.Contains(chain.Steps, s => s.Op == "wait_screen" && s.Screen == "mode_select" && s.Absent == true);
         Assert.Contains(chain.Steps, s => s.Op == "click_element" && s.Element == "standard_set_card");
         Assert.Contains(chain.Steps, s => s.Op == "click_element" && s.Element == "preset_balanced_button");
         Assert.Contains(chain.Steps, s => s.Op == "click_element" && s.Element == "plaza_loadout_button");
-        Assert.Contains(chain.Steps, s => s.Op == "if_screen" && s.Screen == "preset_select");
         Assert.Contains(chain.Steps, s => s.Op == "if_ocr" && s.Keywords is { Count: > 0 });
         Assert.Contains(chain.Steps, s => s.Op == "if_ocr" && s.Keywords!.Contains("未装配") && s.MinCount == 4);
         Assert.Contains(chain.Steps, s => s.Op == "mark_unknown");
@@ -233,7 +235,7 @@ public class DataStoreTests
         var chain = CreateStore().LoadChain("enter_match.json");
         Assert.True(chain.Steps.Count >= 10);
         Assert.Contains(chain.Steps, s => s.Id == "depart" && s.Op == "click_element" && s.Element == "depart_button");
-        Assert.Contains(chain.Steps, s => s.Op == "if_screen" && s.Screen == "plaza_ready");
+        Assert.Contains(chain.Steps, s => s.Op == "switch_screen" && s.Branches!.ContainsKey("plaza_ready"));
         Assert.Contains(chain.Steps, s => s.Op == "wait_screen" && s.Screen == "char_select");
     }
 
