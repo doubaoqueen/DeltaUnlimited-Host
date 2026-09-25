@@ -42,6 +42,8 @@ public static class ChainCommand
             return idx;
         }
 
+        var defaultVisits = new Dictionary<int, int>(); // switch_screen 熔断计数：default 分支连续触发次数（按步骤索引）
+
         int i = 0;
         while (i < chain.Steps.Count)
         {
@@ -302,7 +304,7 @@ public static class ChainCommand
 
                 case "switch_screen":
                 {
-                    // 界面分流：一次截图+识别，按 branches 表跳转；未匹配走 default 兜底
+                    // 界面分流：一次截图+识别，按 branches 表跳转；未匹配走 default 兜底；default 连续触发超阈值则熔断（人工确认后重置）
                     using var frame = CaptureService.CaptureWindowMat(winKeyword);
                     using var norm = FrameTools.Normalize(frame, runtime.DesignWidth, runtime.DesignHeight);
                     var guess = ScreenDetector.Detect(norm, screens, repoRoot);
@@ -311,12 +313,33 @@ public static class ChainCommand
                     Console.WriteLine($"  🔀 界面分流: 当前 {(got == "" ? "unknown" : got)}{amb}（置信度 {guess?.Confidence:F3}）");
                     Logger.Info($"switch_screen: 当前 {(got == "" ? "unknown" : got)}{amb}");
 
+                    bool defaultHit = false;
                     string? target = null;
                     if (got != "" && s.Branches is not null && s.Branches.TryGetValue(got, out var b))
                         target = b;
-                    target ??= s.Default;
+                    else
+                    {
+                        target = s.Default;
+                        defaultHit = true;
+                    }
                     if (string.IsNullOrEmpty(target))
                         throw new InvalidDataException("switch_screen 无匹配分支且缺少 default 兜底目标");
+
+                    if (defaultHit)
+                    {
+                        defaultVisits[i] = defaultVisits.GetValueOrDefault(i) + 1;
+                        if (defaultVisits[i] > (s.MaxLoops ?? 3))
+                        {
+                            Console.WriteLine($"  ⛔ 分流熔断：default 分支连续 {s.MaxLoops ?? 3} 圈，人工确认后回车继续（计数重置）");
+                            Logger.Warn($"switch_screen 熔断（步骤 {i + 1}）：default 连续 {s.MaxLoops ?? 3} 圈");
+                            if (!auto) Console.ReadLine();
+                            defaultVisits[i] = 0;
+                        }
+                    }
+                    else
+                    {
+                        defaultVisits[i] = 0; // 走已知分支则重置熔断计数
+                    }
 
                     Console.WriteLine($"  ↪ 跳转到 “{target}”");
                     i = FindStep(target);
@@ -346,10 +369,11 @@ public static class ChainCommand
     private static bool WaitForScreenState(RuntimeConfig runtime, ScreenTable screens, string repoRoot, string want, int timeoutMs, bool wantAbsent)
     {
         var deadline = DateTime.Now.AddMilliseconds(timeoutMs);
+        int poll = runtime.PollIntervalMs > 0 ? runtime.PollIntervalMs : 600;
         string lastGot = "";
         while (DateTime.Now < deadline)
         {
-            Thread.Sleep(800);
+            // 先识别后睡（每次等待不白花一个轮询间隔）
             using var frame = CaptureService.CaptureWindowMat(runtime.WindowKeyword, raiseAndWait: false);
             using var norm = FrameTools.Normalize(frame, runtime.DesignWidth, runtime.DesignHeight);
             var guess = ScreenDetector.Detect(norm, screens, repoRoot);
@@ -362,6 +386,7 @@ public static class ChainCommand
             }
             bool hit = guess?.Name == want;
             if (hit != wantAbsent) return true; // 出现且要出现 / 消失且要消失
+            Thread.Sleep(poll);
         }
         return false;
     }

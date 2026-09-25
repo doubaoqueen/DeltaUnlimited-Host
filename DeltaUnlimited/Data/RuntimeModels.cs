@@ -20,6 +20,10 @@ public sealed class RuntimeConfig
     [JsonPropertyName("px_per_90deg")]
     public double PxPer90Deg { get; set; } = 0;
 
+    /// <summary>等待类步骤的轮询间隔（ms）。优化阶段先保持 600；真机量到单次识别 &lt;1.5s 后再降到 300-400。</summary>
+    [JsonPropertyName("poll_interval_ms")]
+    public int PollIntervalMs { get; set; } = 600;
+
     /// <summary>设计分辨率（元素坐标/模板/素材的统一基准），运行时按实际分辨率缩放。</summary>
     [JsonPropertyName("design_width")]
     public int DesignWidth { get; set; } = 1920;
