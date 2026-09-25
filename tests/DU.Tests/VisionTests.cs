@@ -298,4 +298,20 @@ public class VisionTests
         };
         Assert.Equal(3, OcrTextMatcher.CountStrict(words, "未装配"));
     }
+
+    [Fact]
+    public void Ocr_WordsOverloads_MatchCachedWordLists()
+    {
+        // 同帧词表缓存路径（ScreenDetector.Scan）：FindStrict/FindAllStrict/CountStrict 的词表重载应与帧路径同语义
+        var words = new List<OcrWord>
+        {
+            new("未", 0, 0, 10, 10), new("装", 12, 0, 10, 10), new("配", 24, 0, 10, 10),
+            new("出发", 100, 100, 40, 20),
+        };
+        Assert.True(Ocr.FindStrict(words, new[] { "未装配" }) is { Found: true });
+        Assert.True(Ocr.FindStrict(words, new[] { "出发" }) is { Found: true });
+        Assert.Equal(2, Ocr.FindAllStrict(words, new[] { "未装配", "出发" }).Count);
+        Assert.Equal(1, Ocr.CountStrict(words, new[] { "未装配" }));
+        Assert.Equal(1, Ocr.CountStrict(words, new[] { "出发" }));
+    }
 }

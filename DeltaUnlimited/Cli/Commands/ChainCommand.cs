@@ -300,6 +300,29 @@ public static class ChainCommand
                     break;
                 }
 
+                case "switch_screen":
+                {
+                    // 界面分流：一次截图+识别，按 branches 表跳转；未匹配走 default 兜底
+                    using var frame = CaptureService.CaptureWindowMat(winKeyword);
+                    using var norm = FrameTools.Normalize(frame, runtime.DesignWidth, runtime.DesignHeight);
+                    var guess = ScreenDetector.Detect(norm, screens, repoRoot);
+                    string got = guess?.Name ?? "";
+                    string amb = guess is { Alternatives.Count: > 0 } ? $"（同时命中: {string.Join(", ", guess.Alternatives)}）" : "";
+                    Console.WriteLine($"  🔀 界面分流: 当前 {(got == "" ? "unknown" : got)}{amb}（置信度 {guess?.Confidence:F3}）");
+                    Logger.Info($"switch_screen: 当前 {(got == "" ? "unknown" : got)}{amb}");
+
+                    string? target = null;
+                    if (got != "" && s.Branches is not null && s.Branches.TryGetValue(got, out var b))
+                        target = b;
+                    target ??= s.Default;
+                    if (string.IsNullOrEmpty(target))
+                        throw new InvalidDataException("switch_screen 无匹配分支且缺少 default 兜底目标");
+
+                    Console.WriteLine($"  ↪ 跳转到 “{target}”");
+                    i = FindStep(target);
+                    continue;
+                }
+
                 default:
                     throw new InvalidDataException($"未知步骤 op: {s.Op}");
             }
@@ -410,6 +433,25 @@ public static class ChainCommand
                                 errors.Add($"步骤{idx}: 不认识的按键名 “{t}”（组合 {s.Key}）");
                         }
                     }
+                    break;
+
+                case "switch_screen":
+                    if (s.Branches is not { Count: > 0 })
+                        errors.Add($"步骤{idx}: switch_screen 缺少 branches");
+                    else
+                    {
+                        foreach (var (sn, tgt) in s.Branches)
+                        {
+                            if (!screens.Screens.ContainsKey(sn))
+                                errors.Add($"步骤{idx}: switch_screen 分支界面 “{sn}” 不存在于 screens.json");
+                            if (string.IsNullOrEmpty(tgt) || chain.Steps.All(x => x.Id != tgt))
+                                errors.Add($"步骤{idx}: switch_screen 分支 “{sn}” 的跳转目标 “{tgt}” 不存在");
+                        }
+                    }
+                    if (string.IsNullOrEmpty(s.Default) || chain.Steps.All(x => x.Id != s.Default))
+                        errors.Add($"步骤{idx}: switch_screen 的 default 兜底目标不存在");
+                    else if (s.MaxLoops is < 1)
+                        errors.Add($"步骤{idx}: switch_screen 的 max_loops 必须 ≥1");
                     break;
 
                 case "pick_operator":

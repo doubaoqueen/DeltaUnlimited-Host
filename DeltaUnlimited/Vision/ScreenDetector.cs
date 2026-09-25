@@ -22,10 +22,24 @@ public static class ScreenDetector
 
     public sealed record Candidate(string Name, double Confidence, bool Matched, int MarkerHits);
 
-    /// <summary>逐界面扫描所有标记，返回按置信度降序的候选（含未命中的），用于校准阈值与诊断。</summary>
+    /// <summary>逐界面扫描所有标记，返回按置信度降序的候选（含未命中的），用于校准阈值与诊断。
+    /// 性能：单次扫描内同 region 的 OCR 词表缓存复用（全帧只识别一次、共用区域只识别一次），
+    /// 避免"每个标记各自全帧 OCR"导致单次 Detect 十几秒。</summary>
     public static IReadOnlyList<Candidate> Scan(Mat frame, ScreenTable table, string repoRoot)
     {
         var list = new List<Candidate>();
+        var wordCache = new Dictionary<string, IReadOnlyList<OcrWord>>();
+        IReadOnlyList<OcrWord> GetWords(int[]? region)
+        {
+            string key = region is { Length: 4 } ? $"{region[0]},{region[1]},{region[2]},{region[3]}" : "full";
+            if (!wordCache.TryGetValue(key, out var ws))
+            {
+                ws = OcrSvc.Engine?.Recognize(frame, region) ?? Array.Empty<OcrWord>();
+                wordCache[key] = ws;
+            }
+            return ws;
+        }
+
         foreach (var (name, def) in table.Screens)
         {
             if (def.Enabled == false) continue; // 显式禁用
@@ -50,9 +64,10 @@ public static class ScreenDetector
                 else if (m.Type == "ocr" && m.Keywords is { Count: > 0 })
                 {
                     var region = ResolveRegion(m.Region, m.RegionName, repoRoot);
+                    var words = GetWords(region);
                     bool markerHit = m.RequireAll == true
-                        ? OcrSvc.FindAllStrict(frame, region, m.Keywords).Count == m.Keywords.Count // 区域内全部关键词命中
-                        : OcrSvc.FindStrict(frame, region, m.Keywords) is { Found: true };          // 任一关键词命中
+                        ? OcrSvc.FindAllStrict(words, m.Keywords).Count == m.Keywords.Count // 区域内全部关键词命中
+                        : OcrSvc.FindStrict(words, m.Keywords) is { Found: true };          // 任一关键词命中
                     if (markerHit)
                     {
                         hit = true;

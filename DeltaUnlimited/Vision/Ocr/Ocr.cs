@@ -24,28 +24,50 @@ public static class Ocr
 
     /// <summary>在区域内严格匹配关键词（任一命中），返回第一个命中；无严格命中返回 null。</summary>
     public static OcrFindResult? FindStrict(Mat frame, int[]? region, IReadOnlyList<string> keywords)
-        => MatchAll(frame, region, keywords).FirstOrDefault();
+    {
+        if (Engine is null || !Engine.IsAvailable) return null;
+        return FindStrict(Engine.Recognize(frame, region), keywords);
+    }
+
+    /// <summary>对已识别词表做严格匹配（同帧词表缓存用：单次扫描内同 region 只识别一次）。</summary>
+    public static OcrFindResult? FindStrict(IReadOnlyList<OcrWord> words, IReadOnlyList<string> keywords)
+        => MatchAll(words, keywords).FirstOrDefault();
 
     /// <summary>一次识别内统计哪些关键词严格命中（require_all 标记用，避免重复 OCR 同区域）。</summary>
     public static IReadOnlyList<string> FindAllStrict(Mat frame, int[]? region, IReadOnlyList<string> keywords)
-        => MatchAll(frame, region, keywords).Select(r => r.Keyword).ToList();
+    {
+        if (Engine is null || !Engine.IsAvailable) return Array.Empty<string>();
+        return FindAllStrict(Engine.Recognize(frame, region), keywords);
+    }
+
+    /// <summary>对已识别词表统计命中的关键词（同帧词表缓存用）。</summary>
+    public static IReadOnlyList<string> FindAllStrict(IReadOnlyList<OcrWord> words, IReadOnlyList<string> keywords)
+        => MatchAll(words, keywords).Select(r => r.Keyword).ToList();
 
     /// <summary>一次识别内统计关键词的严格命中总次数（裸装鉴别等计数场景用；与 FindStrict 同源严格层）。</summary>
     public static int CountStrict(Mat frame, int[]? region, IReadOnlyList<string> keywords)
     {
         if (Engine is null || !Engine.IsAvailable || keywords is not { Count: > 0 })
             return 0;
-        var words = Engine.Recognize(frame, region);
-        return keywords.Sum(k => OcrTextMatcher.CountStrict(words, k));
+        return CountStrict(Engine.Recognize(frame, region), keywords);
     }
+
+    /// <summary>对已识别词表统计命中次数（同帧词表缓存用）。</summary>
+    public static int CountStrict(IReadOnlyList<OcrWord> words, IReadOnlyList<string> keywords)
+        => keywords.Sum(k => OcrTextMatcher.CountStrict(words, k));
 
     private static List<OcrFindResult> MatchAll(Mat frame, int[]? region, IReadOnlyList<string> keywords)
     {
+        if (Engine is null || !Engine.IsAvailable) return new List<OcrFindResult>();
+        return MatchAll(Engine.Recognize(frame, region), keywords);
+    }
+
+    private static List<OcrFindResult> MatchAll(IReadOnlyList<OcrWord> words, IReadOnlyList<string> keywords)
+    {
         var results = new List<OcrFindResult>();
-        if (Engine is null || !Engine.IsAvailable || keywords is not { Count: > 0 })
+        if (keywords is not { Count: > 0 })
             return results;
 
-        var words = Engine.Recognize(frame, region);
         foreach (var kw in keywords)
         {
             var m = OcrTextMatcher.Match(words, kw);

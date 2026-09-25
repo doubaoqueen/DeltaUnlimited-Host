@@ -74,4 +74,16 @@ public sealed class ChainStep
     /// <summary>if_ocr 专用：最小命中词数（默认 1；如“未装配”≥4 判定裸装）。</summary>
     [JsonPropertyName("min_count")]
     public int? MinCount { get; set; }
+
+    /// <summary>switch_screen 专用：界面名 -> 跳转目标 id（一次识别查表分流）。</summary>
+    [JsonPropertyName("branches")]
+    public Dictionary<string, string>? Branches { get; set; }
+
+    /// <summary>switch_screen 专用：未匹配任何已知界面时的兜底跳转目标。</summary>
+    [JsonPropertyName("default")]
+    public string? Default { get; set; }
+
+    /// <summary>switch_screen 专用：default 分支连续触发熔断阈值（超过则人工确认并重置计数）。</summary>
+    [JsonPropertyName("max_loops")]
+    public int? MaxLoops { get; set; }
 }
