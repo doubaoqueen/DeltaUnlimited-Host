@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "说明": "干员选择预设：map_operators=地图名(或 default)→干员（type 突击/支援/工程/侦察，index 类型内序号 0=第一个；counts：突击4/支援4/工程5/侦察4）。选择算法：运行时 OCR 标签带（label_strip）找目标类型标签中心 → 头像点=(标签x+first_avatar_offset+index*avatar_spacing, avatar_first_y)；目标越界/标签不可见→光标移到头像区(avatar_area)滚轮翻动后重识别（方向自动翻转）。⚠️ 无出击按钮：右上角 15s 倒计时自动开局，选完即收工；未配置干员=不选不动（保持当前）。实测锚点（2026-09-24 OperatorBeginTemp）：突击标签≈(98,767)、支援≈(563,770)、工程≈(1027,771)、侦察初始≈(1600,779)（滚到底后≈(1393,779)，见 OperatorEndingTemp）；头像 100x132、同类间距 111、类型间距 464、头像中心 y=873、标签→首头像偏移 33；头像区(79,787)-(1813,939)。滚动位移无需标定——靠标签定位。",
-  "map_operators": {},
+  "map_operators": { "default": { "type": "突击", "index": 1 }},
   "layout": {
     "avatar_first_y": 873,
     "avatar_spacing": 111,

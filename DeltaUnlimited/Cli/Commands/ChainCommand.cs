@@ -323,12 +323,20 @@ public static class ChainCommand
     private static bool WaitForScreenState(RuntimeConfig runtime, ScreenTable screens, string repoRoot, string want, int timeoutMs, bool wantAbsent)
     {
         var deadline = DateTime.Now.AddMilliseconds(timeoutMs);
+        string lastGot = "";
         while (DateTime.Now < deadline)
         {
             Thread.Sleep(800);
             using var frame = CaptureService.CaptureWindowMat(runtime.WindowKeyword, raiseAndWait: false);
             using var norm = FrameTools.Normalize(frame, runtime.DesignWidth, runtime.DesignHeight);
             var guess = ScreenDetector.Detect(norm, screens, repoRoot);
+            string got = guess?.Name ?? "unknown";
+            if (got != lastGot) // 界面变化才打日志（可见的轮询心跳，排查"等待期间发生了什么"）
+            {
+                Console.WriteLine($"  ⏳ 等待界面 {want}{(wantAbsent ? " 消失" : " 出现")}… 当前 {got}");
+                Logger.Info($"等待 {want}{(wantAbsent ? "消失" : "出现")}: 当前 {got}");
+                lastGot = got;
+            }
             bool hit = guess?.Name == want;
             if (hit != wantAbsent) return true; // 出现且要出现 / 消失且要消失
         }
