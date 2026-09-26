@@ -34,6 +34,7 @@ public sealed class MainForm : Form
     private bool _reallyExit;
     private bool _trayHintShown;
     private bool _running;
+    private Task? _runTask; // 链路线程句柄（退出收尾时等它停稳，评审 P3-7）
     private volatile string _lastOutcome = "";
 
     public MainForm(DataStore store, string repoRoot)
@@ -159,7 +160,7 @@ public sealed class MainForm : Form
         _statusLabel.Text = $"▶ 运行中：{wf}（{(auto ? "全自动" : "半自动")}）—— 急停随时有效";
         _lastOutcome = "";
 
-        Task.Run(() =>
+        _runTask = Task.Run(() =>
         {
             try
             {
@@ -172,7 +173,8 @@ public sealed class MainForm : Form
                 Console.Error.WriteLine(ex.ToString());
                 _lastOutcome = "失败";
             }
-        }).ContinueWith(_ => OnChainEnded(), TaskScheduler.FromCurrentSynchronizationContext());
+        });
+        _runTask.ContinueWith(_ => OnChainEnded(), TaskScheduler.FromCurrentSynchronizationContext());
     }
 
     private void OnChainEnded()
@@ -271,9 +273,18 @@ public sealed class MainForm : Form
 
     private void OnFormClosing(object? sender, FormClosingEventArgs e)
     {
-        if (_reallyExit) return;
-        e.Cancel = true; // 关闭 = 收进托盘（真正退出走托盘菜单）
-        HideToTray();
+        if (!_reallyExit)
+        {
+            e.Cancel = true; // 关闭 = 收进托盘（真正退出走托盘菜单）
+            HideToTray();
+            return;
+        }
+        // 真正退出：急停并给链路线程 2s 收尾窗口（评审 P3-7：否则按键释放存在微小竞态窗口）
+        if (_running)
+        {
+            CommandUtil.RequestStop();
+            try { _runTask?.Wait(2000); } catch { }
+        }
     }
 
     protected override void Dispose(bool disposing)

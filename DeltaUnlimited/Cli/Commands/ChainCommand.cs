@@ -320,7 +320,9 @@ public static class ChainCommand
                         if (defaultVisits[i] > (s.MaxLoops ?? 3))
                         {
                             Logger.Warn($"switch_screen 熔断（步骤 {i + 1}）：弹层 {got} 连续 {s.MaxLoops ?? 3} 次关闭失败");
-                            if (!auto && !CommandUtil.WaitForResume($"弹层熔断：{got} 连续 {s.MaxLoops ?? 3} 次关闭失败，人工处理后继续（计数重置）"))
+                            if (auto)
+                                throw new ChainStoppedException(); // --auto 无人工确认口：熔断即中止，杜绝无限重等循环
+                            if (!CommandUtil.WaitForResume($"弹层熔断：{got} 连续 {s.MaxLoops ?? 3} 次关闭失败，人工处理后继续（计数重置）"))
                                 throw new ChainStoppedException();
                             defaultVisits[i] = 0;
                         }
@@ -349,7 +351,9 @@ public static class ChainCommand
                         if (defaultVisits[i] > (s.MaxLoops ?? 3))
                         {
                             Logger.Warn($"switch_screen 熔断（步骤 {i + 1}）：default 连续 {s.MaxLoops ?? 3} 圈");
-                            if (!auto && !CommandUtil.WaitForResume($"分流熔断：default 分支连续 {s.MaxLoops ?? 3} 圈，人工确认后继续（计数重置）"))
+                            if (auto)
+                                throw new ChainStoppedException(); // --auto 无人工确认口：熔断即中止（如匹配超时→重等→再超时的死循环）
+                            if (!CommandUtil.WaitForResume($"分流熔断：default 分支连续 {s.MaxLoops ?? 3} 圈，人工确认后继续（计数重置）"))
                                 throw new ChainStoppedException();
                             defaultVisits[i] = 0;
                         }

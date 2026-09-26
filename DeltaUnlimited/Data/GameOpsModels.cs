@@ -1,4 +1,5 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace DeltaUnlimited.Data;
 
@@ -13,6 +14,10 @@ public sealed class GameOpsTable
 
     [JsonPropertyName("说明")]
     public string? Note { get; set; }
+
+    /// <summary>未映射字段兜底收纳（如"界面坐标点说明"“保留备查”段），不再被 System.Text.Json 静默丢弃（评审 P3-8）。</summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? Extra { get; set; }
 
     /// <summary>操作名 -> 实际按键，如 "interact" -> "f"。</summary>
     [JsonPropertyName("按键映射")]

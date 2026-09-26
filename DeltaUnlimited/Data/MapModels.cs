@@ -1,12 +1,20 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace DeltaUnlimited.Data;
 
 /// <summary>物品价值表 data/item_values.json。</summary>
 public sealed class ItemValuesTable
 {
+    [JsonPropertyName("说明")]
+    public string? Note { get; set; }
+
     [JsonPropertyName("materials")]
     public List<ItemValue> Materials { get; set; } = new();
+
+    /// <summary>未映射字段兜底收纳，不再被 System.Text.Json 静默丢弃（评审 P3-8）。</summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? Extra { get; set; }
 }
 
 public sealed class ItemValue
