@@ -210,23 +210,34 @@ public static class InputService
         Console.WriteLine($"[Input] 鼠标相对移动 ({dx}, {dy})，{steps} 步缓动完成");
     }
 
-    /// <summary>按下并松开一个键（短按，按下时长随机）。支持 "a+b" 组合串与鼠标键 token。</summary>
+    /// <summary>按下并松开一个键（短按，按下时长随机）。支持 "a+b" 组合串与鼠标键 token。
+    /// finally 只释放本次按下的键（逆序）——与 PressKeys 持续按住混用时不误放移动键（评审 P2-10 附带）。</summary>
     public static void PressKey(string key)
     {
         var tokens = SplitCombo(key);
         if (tokens.Count == 0) return;
+        var pressedVks = new List<ushort>();
+        var pressedMouse = new List<uint>();
         try
         {
             foreach (var t in tokens)
             {
-                TokenDown(t);
-                Thread.Sleep(Rand(Config.KeyGapMin, Config.KeyGapMax));
+                if (TokenDown(t, pressedVks, pressedMouse)) // 已在按下状态则不算本次按下
+                    Thread.Sleep(Rand(Config.KeyGapMin, Config.KeyGapMax));
             }
             Thread.Sleep(Rand(Config.KeyTapMin, Config.KeyTapMax));
         }
         finally
         {
-            ReleaseAllHeldKeys();
+            foreach (var down in pressedMouse.AsEnumerable().Reverse())
+                SendMouse(down << 1); // UP = DOWN << 1
+            foreach (var vk in pressedVks.AsEnumerable().Reverse())
+                SendKeyEvent(vk, KEYEVENTF_KEYUP);
+            lock (HeldLock)
+            {
+                foreach (var vk in pressedVks) HeldKeys.Remove(vk);
+                foreach (var down in pressedMouse) HeldMouseButtons.Remove(down);
+            }
         }
         Console.WriteLine($"[Input] 按键 {key}");
     }
@@ -296,29 +307,37 @@ public static class InputService
 
     private static void TokenDown(string token)
     {
+        // 长按/持续按住路径用（HoldKeys/PressKeys）：由调用方的 finally 统一 ReleaseAllHeldKeys 兜底
+        var vks = new List<ushort>();
+        var mouse = new List<uint>();
+        _ = TokenDown(token, vks, mouse);
+    }
+
+    /// <summary>按下单个 token 并登记到本次按下清单（PressKey 用：finally 只释放清单内的键）。
+    /// 已在按下状态（重复 down）返回 false。</summary>
+    private static bool TokenDown(string token, List<ushort> pressedVks, List<uint> pressedMouse)
+    {
         if (IsMouseToken(token))
         {
             uint down = MouseDownFlag(token);
             lock (HeldLock)
             {
-                if (!HeldMouseButtons.Add(down)) return; // 已在按下状态
+                if (!HeldMouseButtons.Add(down)) return false; // 已在按下状态
             }
             SendMouse(down);
-            return;
+            pressedMouse.Add(down);
+            return true;
         }
 
         ushort vk = MapKeyName(token);
         if (vk == 0) throw new ArgumentException($"不认识的按键名: {token}");
-        KeyDown(vk);
-    }
-
-    private static void KeyDown(ushort vk)
-    {
         lock (HeldLock)
         {
-            if (!HeldKeys.Add(vk)) return; // 已在按下状态，避免重复 down
+            if (!HeldKeys.Add(vk)) return false; // 已在按下状态，避免重复 down
         }
         SendKeyEvent(vk, 0);
+        pressedVks.Add(vk);
+        return true;
     }
 
     private static bool IsMouseToken(string token) =>

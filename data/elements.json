@@ -7,11 +7,6 @@
       "strategy": "ocr",
       "params": { "keywords": ["匹配"] }
     },
-    "extract_marker": {
-      "note": "撤离点标记（图标，模板策略；模板待裁剪）",
-      "strategy": "template",
-      "params": { "template": "assets/templates/extract_marker.png", "threshold": 0.8 }
-    },
     "loot_prompt": {
       "note": "拾取提示（'按F拾取'提示文字，OCR 策略）",
       "strategy": "ocr",
