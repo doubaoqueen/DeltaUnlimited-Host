@@ -373,3 +373,6 @@ tests/fixtures/
 # 个人博客文案（本地私有，不上传）
 blog/
 
+# 发布产物（dotnet publish -o release）
+release/
+

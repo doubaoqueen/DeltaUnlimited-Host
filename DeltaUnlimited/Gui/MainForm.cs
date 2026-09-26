@@ -177,6 +177,7 @@ public sealed class MainForm : Form
 
     private void OnChainEnded()
     {
+        if (IsDisposed || Disposing) return; // 链路结束恰逢窗口退出（评审 P3-5：防 ObjectDisposedException）
         SetRunning(false);
         string msg = _lastOutcome switch
         {

@@ -30,6 +30,17 @@ public static class ConsoleRelay
         }
     }
 
+    /// <summary>抑制控制台输出（GUI 模式 FreeConsole 后调用）：原输出换成 Null，
+    /// 日志只进订阅者（GUI 日志窗），且不再每行写无效句柄抛异常。</summary>
+    public static void SuppressConsoleOutput()
+    {
+        lock (Gate)
+        {
+            Console.SetOut(new TeeWriter(TextWriter.Null, Raise));
+            Console.SetError(new TeeWriter(TextWriter.Null, Raise));
+        }
+    }
+
     /// <summary>订阅日志行；接入时补发启动缓冲。</summary>
     public static void Subscribe(Action<string> handler)
     {
