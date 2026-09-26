@@ -9,7 +9,7 @@ namespace DeltaUnlimited.Cli;
 
 /// <summary>干员选择执行器：运行时 OCR 定位类型标签 → 相对偏移计算头像点 → 点击。
 /// 决策链：① 目标类型标签 OCR 命中 → 直接定位；② 目标艺术字读不出但其他类型标签可见 →
-/// 用"可见标签位移=滚动偏移"推算目标位置（数据驱动坐标兜底，标签只从锚点向左移）；③ 全部不可见 → 滚轮翻动重识别。</summary>
+/// 从可见标签出发按"类型人数×同类间距+组间空隙"推算目标位置（间距推算法，更新友好）；③ 全部不可见或推算越界 → 滚轮翻动重识别。</summary>
 public static class OperatorPicker
 {
     /// <summary>尝试选择干员（type + index）。成功返回 true；失败（找不到/OCR 不可用）保持当前干员。</summary>
@@ -76,16 +76,18 @@ public static class OperatorPicker
             }
             else if (labels.Count > 0)
             {
-                // 目标艺术字读不出（如“突击”被误读），但其他类型标签可见 → 推算滚动偏移，锚点兜底（数据驱动坐标最后）
-                int? pred = PredictTargetLabelX(pick.Type, labels, table.Layout.TypeLabels, out string? why);
+                // 目标艺术字读不出（如“突击”被误读），但其他类型标签可见 →
+                // 从可见标签出发，按“左侧类型人数×同类间距+组间空隙”逐组推算目标标签位置（间距推算法，数据驱动；
+                // 游戏加新干员只需改 operator_presets 的 count，推算自动跟着走）
+                int? pred = ComputeTargetLabelX(pick.Type, labels, table.Layout, out string? why);
                 if (pred is int px)
                 {
                     labelX = px;
-                    how = $"目标标签未识别，但可见 [{string.Join(" ", labels.Select(kv => $"{kv.Key}@{kv.Value}"))}]（{why}）→ 锚点兜底 x={px}";
+                    how = $"目标标签未识别，但可见 [{string.Join(" ", labels.Select(kv => $"{kv.Key}@{kv.Value}"))}] → 间距推算 x={px}";
                 }
                 else if (why is not null)
                 {
-                    Console.WriteLine($"  🔍 第 {t + 1} 次：可见标签不足以可靠推算（{why}），继续翻动");
+                    Console.WriteLine($"  🔍 第 {t + 1} 次：{why}，继续翻动");
                 }
             }
 
@@ -102,7 +104,7 @@ public static class OperatorPicker
                         Console.WriteLine($"  ⚠️ 干员 “{pick.Type}” 点击被安全网拦截（目标设计 ({ax},{ay}) → 屏幕 ({sx},{sy})），保持当前干员");
                         return false;
                     }
-                    string method = labels.ContainsKey(pick.Type) ? "OCR 定位" : "锚点兜底";
+                    string method = labels.ContainsKey(pick.Type) ? "OCR 定位" : "间距推算";
                     Console.WriteLine($"  ✅ 干员 “{pick.Type}” 第 {pick.Index + 1} 位：头像设计 ({ax},{ay}) → 屏幕 ({sx},{sy}) 已点击（{method}）");
                     return true;
                 }
@@ -126,30 +128,59 @@ public static class OperatorPicker
         return false;
     }
 
-    /// <summary>用可见标签推算目标类型标签位置（纯函数，可单测）：标签只会从锚点向左移（滚动方向实测），
-    /// 故所有可见标签的“位移=当前x-锚点x”应彼此接近；取中位数作为滚动偏移，预测目标=目标锚点+偏移。
-    /// 不可靠时（位移分歧大 / 偏移为正说明异常右移 / 预测越界）返回 null 并给原因。</summary>
-    public static int? PredictTargetLabelX(string targetType, Dictionary<string, int> labels, Dictionary<string, OperatorLabelAnchor> anchors, out string? reason)
+    /// <summary>间距推算法（纯函数，可单测）：从任意一个可见标签出发，按“左侧类型人数×同类间距+组间空隙”
+    /// 逐组推算目标类型标签位置。类型顺序按锚点 x 升序；组间空隙用相邻锚点实测平均值自校准；
+    /// 多人推算取中位数；分歧 >40px 拒绝；推算位置超出可视区 [60,1900] 返回 null 并给原因（该滚轮了）。
+    /// 更新友好：游戏加新干员 → 改 operator_presets 的 count + 重标定锚点，推算自动跟着走。</summary>
+    public static int? ComputeTargetLabelX(string targetType, IReadOnlyDictionary<string, int> labels, OperatorLayout layout, out string? reason)
     {
         reason = null;
-        if (!anchors.TryGetValue(targetType, out var targetAnchor)) { reason = $"无目标锚点 {targetType}"; return null; }
-        var offs = new List<int>();
+        if (!layout.TypeLabels.ContainsKey(targetType)) { reason = $"类型 “{targetType}” 无锚点"; return null; }
+
+        // 类型顺序：按锚点 x 升序（数据驱动，与屏幕上从左到右一致）
+        var order = layout.TypeLabels
+            .OrderBy(kv => kv.Value.LabelX)
+            .Select(kv => kv.Key)
+            .ToList();
+        int targetIdx = order.IndexOf(targetType);
+
+        // 相邻类型标签间距 = 左侧类型干员数 × 同类头像间距 + 组间空隙；空隙用锚点实测平均（自校准）
+        int spacing = layout.AvatarSpacing;
+        var gaps = new List<int>();
+        for (int i = 0; i + 1 < order.Count; i++)
+        {
+            var a = layout.TypeLabels[order[i]];
+            var b = layout.TypeLabels[order[i + 1]];
+            gaps.Add(b.LabelX - a.LabelX - a.Count * spacing);
+        }
+        int gap = gaps.Count > 0 ? (int)Math.Round(gaps.Average()) : 20;
+
+        var preds = new List<int>();
         foreach (var (type, x) in labels)
         {
-            if (!anchors.TryGetValue(type, out var a)) continue;
-            offs.Add(x - a.LabelX);
+            int li = order.IndexOf(type);
+            if (li < 0 || !layout.TypeLabels.TryGetValue(type, out var a)) continue;
+            int sum = 0;
+            if (li < targetIdx)
+                for (int i = li; i < targetIdx; i++)
+                    sum += layout.TypeLabels[order[i]].Count * spacing + gap;
+            else if (li > targetIdx)
+                for (int i = targetIdx; i < li; i++)
+                    sum -= layout.TypeLabels[order[i]].Count * spacing + gap;
+            preds.Add(x + sum);
         }
-        if (offs.Count == 0) { reason = "可见标签全部没有锚点"; return null; }
+        if (preds.Count == 0) { reason = "可见标签全部无锚点，无法推算"; return null; }
 
-        int spread = offs.Max() - offs.Min();
-        if (spread > 40) { reason = $"标签位移分歧过大（{spread}px > 40px），疑似误识别"; return null; }
+        int spread = preds.Max() - preds.Min();
+        if (spread > 40) { reason = $"多标签推算分歧 {spread}px > 40px，疑似误识别"; return null; }
 
-        offs.Sort();
-        int offset = offs[offs.Count / 2]; // 中位数
-        if (offset > 40) { reason = $"偏移 {offset}px 为正（标签不会右移），疑似误识别"; return null; }
-
-        int pred = targetAnchor.LabelX + offset;
-        if (pred < 60 || pred > 1900) { reason = $"预测位置 x={pred} 越界（目标可能滚出屏幕外）"; return null; }
+        preds.Sort();
+        int pred = preds[preds.Count / 2]; // 中位数
+        if (pred < 60 || pred > 1900)
+        {
+            reason = $"推算位置 x={pred} 超出可视区（{(pred < 60 ? "目标在屏幕左侧外，需反向滚回" : "目标在屏幕右侧外，需继续滚动")}）";
+            return null;
+        }
         return pred;
     }
 
