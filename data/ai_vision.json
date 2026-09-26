@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "说明": "AI 视觉感知模块配置（阶段1：地面可通行性三分类）。红线：模型仅做感知传感器，决策权全在 C# 状态机；enabled=false 即完全回退原始守卫。ep=auto 表示 DirectML(GPU) 优先、失败自动回退 CPU（低配笔记本）。runtime_threads 实测 4 最优（默认全核反而慢且 p99 抖动大）。当前 model 为 v0 placebo（随机权重，仅供管线联调，不可用于生产判断）。",
+  "enabled": true,
+  "model": "assets/ai/models/passability_v0_placebo.onnx",
+  "ep": "auto",
+  "runtime_threads": 4,
+  "roi": [560, 640, 800, 400],
+  "input_size": [112, 224],
+  "min_confidence": 0.70,
+  "filter": { "window": 5, "k": 3, "motion_diff_threshold": 12.0 },
+  "avoid": { "enforce": false, "max_strafe_steps": 2, "max_deviate_ms": 1500 },
+  "drift": {
+    "golden_set_dir": "assets/ai/golden",
+    "min_macro_f1": 0.85,
+    "contradiction_rate_limit": 0.25,
+    "window_minutes": 10,
+    "min_samples": 20
+  },
+  "log": { "background_every": 50, "roi_jpeg_quality": 80, "ring_mb": 2048 }
+}

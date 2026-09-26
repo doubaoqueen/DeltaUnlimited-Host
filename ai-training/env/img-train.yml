@@ -1,0 +1,13 @@
+name: img-train
+channels:
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+      # torch 按显卡安装（RTX5070 → cu128 源），见 README 的两条 pip 命令：
+      # conda activate img-train 后手动执行，避免 yml 内多 index-url 的解析歧义
+      - numpy
+      - pillow
+      - onnx
+      - onnxruntime
