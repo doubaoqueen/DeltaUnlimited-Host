@@ -361,14 +361,15 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
-# 视觉冒烟调试产物
-screenshots/annotated/
-screenshots/captured/
-screenshots/unknown/
+# 视觉冒烟调试产物（运行时截图一律不入库，含归档）
+screenshots/
 
 tests/fixtures/
 
 
-# ���� AI ���߹���
+# 其他 AI 工具工件
 .zcodeignore
+
+# 个人博客文案（本地私有，不上传）
+blog/
 
