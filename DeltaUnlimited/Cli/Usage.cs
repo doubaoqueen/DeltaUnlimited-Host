@@ -16,6 +16,8 @@ public static class Usage
               turn <dx> [dy] [窗口关键字]         视角转动测试（帧差验证，如: turn 800 0）
               drill [圈数] [窗口关键字]           靶场自主行进循环（帧差确认+自动重试+急停）
               patrol [秒数] [阈值] [连续] [90°px] [窗口]   反应式巡逻 v2：贴墙停+横移低效双守卫，自动转向
+              aicollect [--map 地图] [--season 赛季]  可通行性数据采集（边玩边标: 1/2/0/b）
+              aieval [模型] [数据集目录]         三分类评估（混淆矩阵/macro-F1，金标集门禁离线版）
               chain <workflow文件> [--auto]        按 JSON 步骤执行链路（detect/if_screen 分支/jump）
               crop <x> <y> <w> <h> <源图> [输出] [缩放]   从截图裁模板小图（可缩放换算设计分辨率）
               ocr <截图路径> [关键词...]      OCR 诊断：识别全部词 + 关键词严格/候选匹配

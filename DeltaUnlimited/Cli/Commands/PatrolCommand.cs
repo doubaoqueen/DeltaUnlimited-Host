@@ -4,6 +4,7 @@ using DeltaUnlimited.Data;
 using DeltaUnlimited.Input;
 using DeltaUnlimited.Overlay;
 using DeltaUnlimited.Vision;
+using DeltaUnlimited.Vision.Ai;
 using OpenCvSharp;
 
 namespace DeltaUnlimited.Cli.Commands;
@@ -35,6 +36,7 @@ public static class PatrolCommand
         if (hwnd == IntPtr.Zero) throw new InvalidOperationException($"没找到标题含 “{winKeyword}” 的窗口");
 
         CommandUtil.InstallEmergencyStop();
+        AiVision.EnsureStarted(data, repoRoot); // AI 可通行性感知（ai_vision.enabled=false 时自动跳过，无副作用）
 
         Console.WriteLine($"反应式巡逻 v2：最长 {maxSeconds}s | 守卫1 贴墙: 连续 {needLow} 次差 < {stuckThreshold} | 守卫2 横移: {slowDriftSec}s 无 ≥{highScore} 样本 | 转向 {turnPx}px(标定)");
         Console.WriteLine("开始后角色将持续冲刺前进；受阻自动转向。Ctrl+C 急停。");
@@ -53,6 +55,7 @@ public static class PatrolCommand
             int total = stuckEvents + driftEvents;
             Console.WriteLine($"  ⚠️ [t={t:F1}s] {reason}（贴墙#{stuckEvents} / 横移#{driftEvents}）→ 松开前进键");
             Logger.Warn($"{reason}（贴墙#{stuckEvents}/横移#{driftEvents}）→ 右转");
+            AiVision.RecordGuardFired(); // 回填地面真值：模型平静但守卫触发 = 假阴性矛盾（漂移信号）
             InputService.ReleaseAllHeldKeys();
             Thread.Sleep(400);
             Console.WriteLine("  ↻ 右转中...");
@@ -91,6 +94,17 @@ public static class PatrolCommand
                     samples++;
                     diffSum += d;
                     double t = (DateTime.Now - start).TotalSeconds;
+
+                    // AI 预警（预测层）：同一帧喂可通行性传感器；enforce=false 只记录，true = 提前拉动既有守卫
+                    var aiWarn = AiVision.Observe(cur, d);
+                    if (aiWarn.Level == PathWarningLevel.Blocked)
+                    {
+                        if (AiVision.Enforce)
+                            Escalate(t, $"AI 预警：前方不可通行（conf {aiWarn.Confidence:F2}）", drift: false);
+                        else
+                            Console.WriteLine($"  🤖 [t={t:F1}s] AI 预警：前方不可通行（conf {aiWarn.Confidence:F2}）——observe 模式仅记录");
+                    }
+
                     if (d < stuckThreshold)
                     {
                         lowRun++;
@@ -131,6 +145,12 @@ public static class PatrolCommand
         double avg = samples > 0 ? diffSum / samples : 0;
         Console.WriteLine($"\n🏁 巡逻结束：运行 {(DateTime.Now - start):hh\\:mm\\:ss} | 采样 {samples} 次 | 平均运动差 {avg:F2} | 贴墙事件 {stuckEvents} | 横移/低效事件 {driftEvents}");
         Logger.Info($"🏁 巡逻结束：采样 {samples} 平均差 {avg:F2} 贴墙 {stuckEvents} 横移 {driftEvents}");
+        var (aiFrames, aiBlocked, aiContradictions) = AiVision.SnapshotStats();
+        if (aiFrames > 0)
+        {
+            Console.WriteLine($"  🤖 AI 感知：{aiFrames} 帧 | blocked 预警 {aiBlocked} | 矛盾 {aiContradictions}（明细见 logs/ai/）");
+            Logger.Info($"AI 感知统计: {aiFrames} 帧 blocked 预警 {aiBlocked} 矛盾 {aiContradictions}");
+        }
         Console.WriteLine("转角标定（与 EDPI=DPI×游戏灵敏度 相关，换设置需重标）:");
         Console.WriteLine("  面朝固定参照物 → 重复执行 turn 1000 0 直到回到原方向，记次数 n（转一圈约需 n 次）");
         Console.WriteLine($"  → 90° 的 px ≈ 250×n，当前标定值 {runtime.PxPer90Deg} 已存 data/runtime.json（EDPI 变化时更新它，或用第 4 参临时覆盖）");

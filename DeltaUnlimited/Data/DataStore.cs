@@ -55,6 +55,7 @@ public sealed class DataStore
     public LoadoutPresetTable LoadLoadoutPresets() => LoadJson<LoadoutPresetTable>("data/loadout_preset.json");
     public ItemCatalogTable LoadItemCatalog() => LoadJson<ItemCatalogTable>("data/item_catalog.json");
     public OperatorPresetTable LoadOperatorPresets() => LoadJson<OperatorPresetTable>("data/operator_presets.json");
+    public AiVisionConfig LoadAiVision() => LoadJson<AiVisionConfig>("data/ai_vision.json");
     public Workflow LoadWorkflow(string file) => LoadJson<Workflow>($"workflows/{file}");
     public RuntimeConfig LoadRuntime() => LoadJson<RuntimeConfig>("data/runtime.json");
     public Chain LoadChain(string file) => LoadJson<Chain>($"workflows/{file}");

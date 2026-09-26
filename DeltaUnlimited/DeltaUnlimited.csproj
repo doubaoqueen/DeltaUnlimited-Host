@@ -10,6 +10,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- GPU 优先：DirectML EP（Windows 任意 DX12 GPU，零系统依赖）。独立包止于 1.24.4（此后微软不再发布 DML 线），
+         1.30 主包虽有 DML 托管 API 但不含原生 EP，故钉 1.24.4；小模型量级下与新版无性能差异 -->
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.DirectML" Version="1.24.4" />
     <PackageReference Include="OpenCvSharp4" Version="4.13.0.20260627" />
     <PackageReference Include="OpenCvSharp4.runtime.win" Version="4.13.0.20260627" />
     <PackageReference Include="Vanara.PInvoke.Gdi32" Version="5.0.7" />

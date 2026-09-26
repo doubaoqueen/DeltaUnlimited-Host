@@ -50,6 +50,8 @@ try
         case "turn": TurnCommand.Run(root, args); break;
         case "drill": DrillCommand.Run(store, root, args); break;
         case "patrol": PatrolCommand.Run(store, root, args); break;
+        case "aicollect": AiCollectCommand.Run(store, root, args); break;
+        case "aieval": AiEvalCommand.Run(store, root, args); break;
         case "chain": ChainCommand.Run(store, root, args); break;
         case "crop": CropCommand.Run(root, args); break;
         case "ocr": OcrProbeCommand.Run(root, args); break;
