@@ -102,16 +102,32 @@ public static class ScreenDetector
         return new ScreenGuess(best.Name, best.Confidence, table.Screens[best.Name].Actions, alts);
     }
 
-    /// <summary>解析标记区域：显式 region 数组优先，其次按名查 zones 表。</summary>
+    /// <summary>解析标记区域：显式 region 数组优先，其次按名查 zones 表。
+    /// 非法配置（长度≠4 / 具名区缺失）回退全帧搜索，但必须告警留痕（评审 P3：静默回退会让行为悄悄改变）。</summary>
     private static int[]? ResolveRegion(List<int>? region, string? regionName, string repoRoot)
     {
         if (region is { Count: 4 }) return region.ToArray();
+        if (region is { Count: > 0 })
+            WarnOnce($"region:{string.Join(",", region)}", $"markers.region 长度 {region.Count} ≠ 4，已回退全帧搜索: [{string.Join(",", region)}]");
         if (!string.IsNullOrEmpty(regionName))
         {
             var zones = ZoneCache.GetOrAdd(repoRoot, r => new DataStore(r).LoadZones());
             if (zones.Zones.TryGetValue(regionName, out var z) && z is { Count: 4 })
                 return z.ToArray();
+            WarnOnce($"zone:{regionName}", $"zones.json 缺少具名区域 “{regionName}”（或长度≠4），已回退全帧搜索");
         }
         return null;
+    }
+
+    private static readonly HashSet<string> WarnedRegionKeys = new();
+
+    /// <summary>同类配置错误只告警一次（Detect 每 600ms 一帧，不去重会刷屏）。</summary>
+    private static void WarnOnce(string key, string message)
+    {
+        lock (WarnedRegionKeys)
+        {
+            if (!WarnedRegionKeys.Add(key)) return;
+        }
+        Console.WriteLine($"⚠️ [ScreenDetector] {message}");
     }
 }

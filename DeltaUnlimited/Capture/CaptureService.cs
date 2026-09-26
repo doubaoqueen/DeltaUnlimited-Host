@@ -76,10 +76,11 @@ public static class CaptureService
     public static (int X, int Y, int W, int H)? GetClientScreenRect(IntPtr hwnd)
     {
         if (hwnd == IntPtr.Zero) return null;
+        if (IsMinimized(hwnd)) return null; // 最小化时 GetClientRect 仍返回正常尺寸、ClientToScreen 返回 (-32000,-32000)，必须先 IsIconic 判断，否则截回黑帧继续 OCR/乱点（评审 P1-3）
         if (!GetClientRect(hwnd, out RECT client)) return null;
         int w = client.Right - client.Left;
         int h = client.Bottom - client.Top;
-        if (w <= 0 || h <= 0) return null; // 最小化
+        if (w <= 0 || h <= 0) return null; // 客户区尺寸无效
 
         var origin = new POINT(0, 0);
         if (!ClientToScreen(hwnd, ref origin)) return null;
@@ -211,14 +212,24 @@ public static class CaptureService
         return new CaptureOutcome(pngPath, srcX, srcY, w, h, mean[0], mean[1], mean[2]);
     }
 
-    /// <summary>截指定窗口客户区，返回内存中的 BGRA Mat（调用方负责 Dispose）——不落盘，供帧差/识别用。
-    /// raiseAndWait=false 时跳过"置顶+等待"（连续采样提速用，要求窗口已在前台/最上层）。</summary>
+    /// <summary>按标题关键字找窗口并截其客户区（等价于 FindWindowByTitle + hwnd 直定版）。</summary>
     public static Mat CaptureWindowMat(string titleKeyword, bool raiseAndWait = true)
     {
         EnsureDpiAwareness();
         IntPtr hwnd = FindWindowByTitle(titleKeyword);
         if (hwnd == IntPtr.Zero)
             throw new InvalidOperationException($"没找到标题含 “{titleKeyword}” 的窗口");
+        return CaptureWindowMat(hwnd, raiseAndWait);
+    }
+
+    /// <summary>截指定窗口客户区，返回内存中的 BGRA Mat（调用方负责 Dispose）——不落盘，供帧差/识别用。
+    /// hwnd 直定版：多窗口标题匹配时"看 A 窗点 B 窗"不再分叉（评审 P2-6），调用方与点击路径传同一 hwnd。
+    /// raiseAndWait=false 时跳过"置顶+等待"（连续采样提速用，要求窗口已在前台/最上层）。</summary>
+    public static Mat CaptureWindowMat(IntPtr hwnd, bool raiseAndWait = true)
+    {
+        EnsureDpiAwareness();
+        if (hwnd == IntPtr.Zero)
+            throw new InvalidOperationException("窗口句柄为空，无法截图");
 
         var client = GetClientScreenRect(hwnd)
             ?? throw new InvalidOperationException("窗口无效或最小化，请还原窗口后重试");

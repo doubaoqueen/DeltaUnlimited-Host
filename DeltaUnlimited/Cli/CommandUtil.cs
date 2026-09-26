@@ -48,7 +48,16 @@ public static class CommandUtil
         Console.WriteLine($"  ⏸ {message} —— 按回车继续（Ctrl+C 急停）");
         while (!StopRequested)
         {
-            if (Console.KeyAvailable && Console.ReadKey(true).Key == ConsoleKey.Enter) return true;
+            bool enter = false;
+            try
+            {
+                enter = Console.KeyAvailable && Console.ReadKey(true).Key == ConsoleKey.Enter;
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or IOException)
+            {
+                // stdin 重定向/无控制台环境（如 GUI 未注入 PauseHandler）没有可读键盘：只能等急停（评审 P3）
+            }
+            if (enter) return true;
             Thread.Sleep(60);
         }
         return false;

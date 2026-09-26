@@ -1,3 +1,4 @@
+using DeltaUnlimited.Data;
 using DeltaUnlimited.Vision;
 using DeltaUnlimited.Vision.Ocr;
 using OpenCvSharp;
@@ -29,7 +30,8 @@ public static class OcrProbeCommand
 
         using var img = Cv2.ImRead(Path.Combine(repoRoot, imageRel), ImreadModes.Color);
         if (img.Empty()) throw new FileNotFoundException($"图片读取失败: {imageRel}");
-        using var norm = FrameTools.Normalize(img, 1920, 1080);
+        var runtime = new DataStore(repoRoot).LoadRuntime(); // 探针与真实点击路径用同一设计分辨率，避免结论分叉（评审 P2-12）
+        using var norm = FrameTools.Normalize(img, runtime.DesignWidth, runtime.DesignHeight);
 
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var words = Ocr.Engine.Recognize(norm, region);

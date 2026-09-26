@@ -46,9 +46,10 @@ public static class PatrolCommand
         double diffSum = 0, lastHighAt = 0;
         Mat? prev = null;
 
-        void Escalate(double t, string reason)
+        // P2-11：守卫类型传入统一计数——此前横移分支不自增 driftEvents，maxEvents 熔断闸门对横移事件完全无效
+        void Escalate(double t, string reason, bool drift)
         {
-            stuckEvents++;
+            if (drift) driftEvents++; else stuckEvents++;
             int total = stuckEvents + driftEvents;
             Console.WriteLine($"  ⚠️ [t={t:F1}s] {reason}（贴墙#{stuckEvents} / 横移#{driftEvents}）→ 松开前进键");
             Logger.Warn($"{reason}（贴墙#{stuckEvents}/横移#{driftEvents}）→ 右转");
@@ -107,9 +108,9 @@ public static class PatrolCommand
                     }
 
                     if (lowRun >= needLow)
-                        Escalate(t, "判定贴墙卡住（画面连续低变化）");
+                        Escalate(t, "判定贴墙卡住（画面连续低变化）", drift: false);
                     else if (samples > 8 && t - lastHighAt >= slowDriftSec)
-                        Escalate(t, "疑似贴墙横移/低效前进（长时间无高速运动样本）");
+                        Escalate(t, "疑似贴墙横移/低效前进（长时间无高速运动样本）", drift: true);
                 }
                 prev?.Dispose();
                 prev = cur;

@@ -10,24 +10,45 @@ public class StopAndPauseTests
     public async Task PauseGate_Wait_Resume_ReturnsTrue()
     {
         CommandUtil.ResetStop();
-        var t = Task.Run(() => PauseGate.Wait("测试暂停"));
-        await Task.Delay(200);
-        Assert.False(t.IsCompleted, "未放行前应阻塞");
-        PauseGate.Resume();
-        await t.WaitAsync(TimeSpan.FromSeconds(2)); // 超时会抛 TimeoutException
-        Assert.True(await t);
+        var paused = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnPauseRequested(string message) => paused.TrySetResult();
+        PauseGate.PauseRequested += OnPauseRequested;
+        try
+        {
+            var t = Task.Run(() => PauseGate.Wait("测试暂停"));
+            // 等 Wait 真正建好闸门再放行：原 Task.Delay(200) 在线程池饥饿时会与 Resume 竞态（评审 P2-7）
+            await paused.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            Assert.False(t.IsCompleted, "未放行前应阻塞");
+            PauseGate.Resume();
+            await t.WaitAsync(TimeSpan.FromSeconds(2)); // 超时会抛 TimeoutException
+            Assert.True(await t);
+        }
+        finally
+        {
+            PauseGate.PauseRequested -= OnPauseRequested;
+        }
     }
 
     [Fact]
     public async Task PauseGate_Wait_Interrupt_ReturnsFalse()
     {
         CommandUtil.ResetStop();
-        var t = Task.Run(() => PauseGate.Wait("测试暂停"));
-        await Task.Delay(200);
-        Assert.False(t.IsCompleted, "未放行前应阻塞");
-        PauseGate.Interrupt();
-        await t.WaitAsync(TimeSpan.FromSeconds(2)); // 超时会抛 TimeoutException
-        Assert.False(await t);
+        var paused = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnPauseRequested(string message) => paused.TrySetResult();
+        PauseGate.PauseRequested += OnPauseRequested;
+        try
+        {
+            var t = Task.Run(() => PauseGate.Wait("测试暂停"));
+            await paused.Task.WaitAsync(TimeSpan.FromSeconds(2)); // 同上：事件同步代替延时（评审 P2-7）
+            Assert.False(t.IsCompleted, "未放行前应阻塞");
+            PauseGate.Interrupt();
+            await t.WaitAsync(TimeSpan.FromSeconds(2)); // 超时会抛 TimeoutException
+            Assert.False(await t);
+        }
+        finally
+        {
+            PauseGate.PauseRequested -= OnPauseRequested;
+        }
     }
 
     [Fact]

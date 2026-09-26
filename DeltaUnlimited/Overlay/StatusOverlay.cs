@@ -11,7 +11,10 @@ public static class StatusOverlay
 {
     private static readonly object Sync = new();
     private static Thread? _thread;
-    private static volatile bool _stop;
+    private static LoopState? _loop; // 每代渲染线程自己的停止标志（评审 P2-8①：共享 _stop 在 Join 超时后被 Start 复位会复活旧渲染线程）
+
+    private sealed class LoopState { public volatile bool Stop; }
+
     private static string _header = "DeltaUnlimited 状态";
     private static string[] _lines = Array.Empty<string>();
     private static bool _dirty = true;
@@ -24,8 +27,9 @@ public static class StatusOverlay
     public static void Start(int x, int y, int w, int h)
     {
         Stop();
-        _stop = false;
-        _thread = new Thread(() => RenderLoop(x, y, w, h)) { IsBackground = true, Name = "StatusOverlay" };
+        var loop = new LoopState();
+        _loop = loop;
+        _thread = new Thread(() => RenderLoop(loop, x, y, w, h)) { IsBackground = true, Name = "StatusOverlay" };
         _thread.Start();
     }
 
@@ -42,7 +46,8 @@ public static class StatusOverlay
 
     public static void Stop()
     {
-        _stop = true;
+        var loop = _loop;
+        if (loop != null) loop.Stop = true; // 只停当前代线程：旧线程持有自己的状态，不会被新一次 Start 复活（评审 P2-8①）
         _thread?.Join(600);
         _thread = null;
     }
@@ -63,9 +68,10 @@ public static class StatusOverlay
             _ = SetWindowPos(_hwnd, _insertAfter, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     }
 
-    private static void RenderLoop(int x, int y, int w, int h)
+    private static void RenderLoop(LoopState loop, int x, int y, int w, int h)
     {
         IntPtr hwnd = IntPtr.Zero, memDc = IntPtr.Zero, dib = IntPtr.Zero;
+        IntPtr font = IntPtr.Zero, oldFont = IntPtr.Zero, oldBmp = IntPtr.Zero;
         string lastHeader = "";
         string[] lastLines = Array.Empty<string>();
         try
@@ -107,11 +113,11 @@ public static class StatusOverlay
             if (memDc == IntPtr.Zero || dib == IntPtr.Zero)
                 throw new Win32Exception(Marshal.GetLastWin32Error(), "创建悬浮面板画布失败");
 
-            IntPtr oldBmp = SelectObject(memDc, dib);
-            IntPtr font = CreateFontW(16, 0, 0, 0, 400, 0, 0, 0, 1, 0, 0, 0, 0, "Microsoft YaHei");
-            IntPtr oldFont = SelectObject(memDc, font);
+            oldBmp = SelectObject(memDc, dib);
+            font = CreateFontW(16, 0, 0, 0, 400, 0, 0, 0, 1, 0, 0, 0, 0, "Microsoft YaHei");
+            oldFont = SelectObject(memDc, font);
 
-            while (!_stop)
+            while (!loop.Stop)
             {
                 // 泵消息：WM_NCHITTEST 与拖动依赖消息循环
                 while (PeekMessageW(out MSG m, IntPtr.Zero, 0, 0, 1 /* PM_REMOVE */))
@@ -148,9 +154,6 @@ public static class StatusOverlay
                 }
                 Thread.Sleep(20);
             }
-
-            _ = SelectObject(memDc, oldFont);
-            _ = SelectObject(memDc, oldBmp);
         }
         catch (Exception ex)
         {
@@ -158,7 +161,14 @@ public static class StatusOverlay
         }
         finally
         {
-            _hwnd = IntPtr.Zero;
+            // 选入 DC 的对象先还原，字体再 DeleteObject（选中状态下删除会失败继续泄漏）（评审 P2-8②）
+            if (memDc != IntPtr.Zero)
+            {
+                if (oldFont != IntPtr.Zero) _ = SelectObject(memDc, oldFont);
+                if (oldBmp != IntPtr.Zero) _ = SelectObject(memDc, oldBmp);
+            }
+            if (font != IntPtr.Zero) _ = DeleteObject(font); // GDI 字体句柄每次 Start 补删，不再泄漏
+            if (_hwnd == hwnd) _hwnd = IntPtr.Zero; // 只有还是自己的窗口才清（防 Join 超时后旧线程收尾清掉新线程的句柄）
             if (memDc != IntPtr.Zero) _ = DeleteDC(memDc);
             if (dib != IntPtr.Zero) _ = DeleteObject(dib);
             if (hwnd != IntPtr.Zero) _ = DestroyWindow(hwnd);

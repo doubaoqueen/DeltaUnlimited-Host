@@ -44,7 +44,7 @@ public static class ChainCommand
             return idx;
         }
 
-        var defaultVisits = new Dictionary<int, int>(); // switch_screen 熔断计数：default 分支连续触发次数（按步骤索引）
+        var defaultVisits = new Dictionary<int, int>(); // switch_screen 熔断计数（按步骤索引）：default 分支连续触发 + dismiss 弹层关闭重检共用（评审 P2-5）
 
         int i = 0;
         try
@@ -312,9 +312,18 @@ public static class ChainCommand
                     Console.WriteLine($"  🔀 界面分流: 当前 {(got == "" ? "unknown" : got)}{amb}（置信度 {guess?.Confidence:F3}）");
                     Logger.Info($"switch_screen: 当前 {(got == "" ? "unknown" : got)}{amb}");
 
-                    // 弹层自动关闭：检测到带 dismiss 键的界面（空格继续类通用弹层）→ 按键关闭 → 重跑本步骤重识别
+                    // 弹层自动关闭：检测到带 dismiss 键的界面（空格继续类通用弹层）→ 按键关闭 → 重跑本步骤重识别。
+                    // P2-5：关闭重检计入同一熔断计数——界面被误判为 space_continue 且关不掉时不再无限按空格，超限进人工确认
                     if (got != "" && screens.Screens.TryGetValue(got, out var gotDef) && !string.IsNullOrEmpty(gotDef.Dismiss))
                     {
+                        defaultVisits[i] = defaultVisits.GetValueOrDefault(i) + 1;
+                        if (defaultVisits[i] > (s.MaxLoops ?? 3))
+                        {
+                            Logger.Warn($"switch_screen 熔断（步骤 {i + 1}）：弹层 {got} 连续 {s.MaxLoops ?? 3} 次关闭失败");
+                            if (!auto && !CommandUtil.WaitForResume($"弹层熔断：{got} 连续 {s.MaxLoops ?? 3} 次关闭失败，人工处理后继续（计数重置）"))
+                                throw new ChainStoppedException();
+                            defaultVisits[i] = 0;
+                        }
                         Console.WriteLine($"  ⌨ 界面 {got} 带自动关闭键 “{gotDef.Dismiss}”，按下后重新识别");
                         Logger.Info($"自动关闭弹层 {got}（按 {gotDef.Dismiss}）");
                         InputService.EnsureForeground(hwnd);
@@ -429,6 +438,14 @@ public static class ChainCommand
     private static void ValidateChain(Chain chain, ElementsTable elements, ScreenTable screens, string repoRoot)
     {
         var errors = new List<string>();
+        if (chain.Steps.Count == 0) // 空 steps（如节点图格式的 demo_smoke.json 误入 chain）直接报错，杜绝"空跑成功"（评审 P1-2）
+            errors.Add("链路没有任何步骤（steps 为空或缺失）——请确认文件是链路格式（顶层含 steps 数组），而非节点图格式");
+
+        // 重复 id 检查：FindStep 取首个匹配，重复 id 会让跳转悄悄落错步（评审 P2-4）
+        foreach (var g in chain.Steps.Where(s => !string.IsNullOrEmpty(s.Id))
+                     .GroupBy(s => s.Id!, StringComparer.Ordinal).Where(g => g.Count() > 1))
+            errors.Add($"重复的步骤 id “{g.Key}”（出现 {g.Count()} 次）——跳转只会命中第一个");
+
         foreach (var (s, idx) in chain.Steps.Select((s, i) => (s, i + 1)))
         {
             switch (s.Op)
@@ -511,7 +528,15 @@ public static class ChainCommand
 
                 case "pick_operator":
                     break; // 无必填字段（读 operator_presets 配置，未配置则跳过）
+
+                default: // 未知 op 加载期报错（如拼错的 swich_screen），不再静默放行到运行时才炸（评审 P2-4）
+                    errors.Add($"步骤{idx}: 未知 op “{s.Op}”");
+                    break;
             }
+
+            // if_* 必须带 jump_to：否则条件判断结果无处使用，等于空转（评审 P2-4）
+            if (s.Op is "if_screen" or "if_template" or "if_ocr" && string.IsNullOrEmpty(s.JumpTo))
+                errors.Add($"步骤{idx}: {s.Op} 缺少 jump_to（条件分支必须带跳转目标）");
 
             if (!string.IsNullOrEmpty(s.JumpTo) && chain.Steps.All(x => x.Id != s.JumpTo))
                 errors.Add($"步骤{idx}: jump_to “{s.JumpTo}” 指向不存在的步骤 id");

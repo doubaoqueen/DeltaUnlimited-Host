@@ -7,6 +7,7 @@ namespace DeltaUnlimited.Overlay;
 public static class Logger
 {
     private static string _dir = "";
+    private static readonly object _fileLock = new(); // P2-9：链路线程与 GUI 并发追加同一日志文件，无锁会 IOException 被吞 → 日志窗静默丢行
 
     /// <summary>初始化日志目录（启动时调用一次）。</summary>
     public static void Init(string repoRoot)
@@ -36,7 +37,8 @@ public static class Logger
         try
         {
             if (_dir != "")
-                File.AppendAllText(Path.Combine(_dir, $"status_{DateTime.Now:yyyyMMdd}.log"), line + Environment.NewLine);
+                lock (_fileLock)
+                    File.AppendAllText(Path.Combine(_dir, $"status_{DateTime.Now:yyyyMMdd}.log"), line + Environment.NewLine);
         }
         catch
         {

@@ -201,12 +201,13 @@ public class DataStoreTests
     }
 
     [Fact]
-    public void OperatorPresets_Loads_EmptyStub()
+    public void OperatorPresets_Loads_WithDefaultEntry()
     {
-        // 干员选择预留：schema 已建、map_operators 为空即可加载（布局锚点已按 2026-09-24 实测标定）
+        // 干员选择配置：schema 已建，且 map_operators 必须含 default 兜底项
+        // （链路按地图名未命中时回退 default；只断言 NotNull 兜不住 default 丢失，评审 P3-10）
         var table = CreateStore().LoadOperatorPresets();
         Assert.Equal(1, table.SchemaVersion);
-        Assert.NotNull(table.MapOperators);
+        Assert.True(table.MapOperators.ContainsKey("default"), "map_operators 缺少 default 兜底项");
         Assert.Equal(111, table.Layout.AvatarSpacing);
         Assert.Equal(873, table.Layout.AvatarFirstY);
         Assert.Equal(33, table.Layout.FirstAvatarOffset);

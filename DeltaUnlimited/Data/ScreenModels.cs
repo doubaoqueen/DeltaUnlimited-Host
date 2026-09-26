@@ -15,7 +15,8 @@ public sealed class ScreenTable
     public Dictionary<string, ScreenDef> Screens { get; set; } = new();
 }
 
-/// <summary>单个界面定义：markers 全部命中即判定为该界面（分数取最差命中置信度）。</summary>
+/// <summary>单个界面定义：任一标记命中即判定为该界面（置信度取命中标记的最高值，见 ScreenDetector）。
+/// 这使"主标记 + 兜底标记"分层自然成立；与 screens.json 的"说明"一致。</summary>
 public sealed class ScreenDef
 {
     [JsonPropertyName("enabled")]

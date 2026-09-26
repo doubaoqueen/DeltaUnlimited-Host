@@ -1,3 +1,4 @@
+using DeltaUnlimited.Data;
 using DeltaUnlimited.Vision;
 using OpenCvSharp;
 
@@ -15,7 +16,8 @@ public static class TplProbeCommand
 
         using var img = Cv2.ImRead(Path.Combine(repoRoot, imageRel), ImreadModes.Color);
         if (img.Empty()) throw new FileNotFoundException($"图片读取失败: {imageRel}");
-        using var norm = FrameTools.Normalize(img, 1920, 1080);
+        var runtime = new DataStore(repoRoot).LoadRuntime(); // 探针与真实点击路径用同一设计分辨率，避免结论分叉（评审 P2-12）
+        using var norm = FrameTools.Normalize(img, runtime.DesignWidth, runtime.DesignHeight);
 
         var r = TemplateMatcher.Match(norm, Path.Combine(repoRoot, tplRel), threshold);
         Console.WriteLine($"模板 {tplRel} 在 {imageRel} 上（阈值 {threshold:F2}）:");

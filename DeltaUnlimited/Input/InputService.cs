@@ -73,9 +73,19 @@ public static class InputService
             Console.WriteLine($"[Input] 首次落点偏离，已直接钉正: 光标 ({actual.X},{actual.Y})");
         }
 
-        SendMouse(MOUSEEVENTF_LEFTDOWN);
-        Thread.Sleep(Rand(Config.PressHoldMin, Config.PressHoldMax)); // 按下到抬起的按压时长
-        SendMouse(MOUSEEVENTF_LEFTUP);
+        // P2-10：DOWN 先登记进急停释放清单，DOWN…UP 包 try/finally——中间异常（如 SendInput 被拒/焦点突变）
+        // 也会补发 UP，急停 ReleaseAllHeldKeys 才放得掉这颗键，防左键卡死
+        lock (HeldLock) _ = HeldMouseButtons.Add(MOUSEEVENTF_LEFTDOWN);
+        try
+        {
+            SendMouse(MOUSEEVENTF_LEFTDOWN);
+            Thread.Sleep(Rand(Config.PressHoldMin, Config.PressHoldMax)); // 按下到抬起的按压时长
+        }
+        finally
+        {
+            SendMouse(MOUSEEVENTF_LEFTUP);
+            lock (HeldLock) _ = HeldMouseButtons.Remove(MOUSEEVENTF_LEFTDOWN);
+        }
         Console.WriteLine($"[Input] 左键单击 屏幕({screenX}, {screenY})，落点校验通过（实际 {actual.X},{actual.Y}）");
         return true;
     }
@@ -123,8 +133,14 @@ public static class InputService
     {
         int w = GetSystemMetrics(SM_CXSCREEN);
         int h = GetSystemMetrics(SM_CYSCREEN);
-        uint nx = (uint)(screenX * 65535 / Math.Max(1, w - 1));
-        uint ny = (uint)(screenY * 65535 / Math.Max(1, h - 1));
+        // P3：负坐标（游戏窗口在主屏左侧/上方的多显示器布局）经 (uint) 强转会回绕成垃圾归一化值——
+        // 钳回主屏范围并告警。完整多屏支持（MOUSEEVENTF_VIRTUALDESK + 虚拟屏幕归一化）属行为变更，需主力拍板。
+        int cx = Math.Clamp(screenX, 0, Math.Max(0, w - 1));
+        int cy = Math.Clamp(screenY, 0, Math.Max(0, h - 1));
+        if (cx != screenX || cy != screenY)
+            Console.WriteLine($"[Input] ⚠️ 目标 ({screenX},{screenY}) 超出主屏 {w}x{h}，已钳到 ({cx},{cy})（多显示器越屏定位未支持）");
+        uint nx = (uint)(cx * 65535 / Math.Max(1, w - 1));
+        uint ny = (uint)(cy * 65535 / Math.Max(1, h - 1));
         var input = new INPUT
         {
             type = INPUT_MOUSE,
