@@ -73,14 +73,13 @@
     { "op": "jump", "jump_to": "reminder" },
     { "id": "wait_match", "op": "wait_screen", "screen": "char_select", "timeout_ms": 90000, "jump_to": "after_match_check" },
     { "op": "jump", "jump_to": "pick_operator" },
-    { "id": "after_match_check", "op": "switch_screen", "default": "done",
+    { "id": "after_match_check", "op": "switch_screen", "default": "match_fail",
       "branches": { "char_select": "pick_operator", "matching": "wait_match" } },
     { "id": "pick_operator", "op": "pick_operator" },
     { "op": "jump", "jump_to": "done" },
     { "id": "match_fail", "op": "pause", "message": "匹配等待超时（人工处理，可手动点出发后重跑链路）" },
-    { "op": "jump", "jump_to": "end" },
+    { "op": "jump", "jump_to": "wait_match" },
     { "id": "done", "op": "detect" },
-    { "op": "pause", "message": "进场链路结束（已选干员等待自动开局，或已进入对局）" },
-    { "id": "end", "op": "pause", "message": "链路结束" }
+    { "op": "pause", "message": "进场链路结束（已选干员等待自动开局，或已进入对局）" }
   ]
 }

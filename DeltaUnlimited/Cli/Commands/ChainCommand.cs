@@ -529,6 +529,13 @@ public static class ChainCommand
                 case "pick_operator":
                     break; // 无必填字段（读 operator_presets 配置，未配置则跳过）
 
+                case "jump":
+                case "wait":
+                case "pause":
+                case "detect":
+                case "mark_unknown":
+                    break; // 无必填字段（jump_to/expect_screen 等通用字段在循环后统一校验）——必须显式列出，否则会被 default 误判为未知 op
+
                 default: // 未知 op 加载期报错（如拼错的 swich_screen），不再静默放行到运行时才炸（评审 P2-4）
                     errors.Add($"步骤{idx}: 未知 op “{s.Op}”");
                     break;
@@ -549,7 +556,70 @@ public static class ChainCommand
             }
         }
 
+        // 死步骤告警（评审 P1-1 同步建议）：入口与所有跳转都到不了的孤立步骤——防死分支复发（如匹配超时人工确认点失联）
+        foreach (var idx in FindUnreachableSteps(chain.Steps))
+        {
+            var dead = chain.Steps[idx];
+            string msg = $"步骤{idx + 1}（id={dead.Id ?? "无"} / op={dead.Op}）不可达：不是入口、无任何跳转指向、顺序执行也到不了，疑似死分支";
+            Console.WriteLine($"  ⚠️ 链路校验告警: {msg}");
+            Logger.Warn($"链路 {chain.Name}: {msg}");
+        }
+
         if (errors.Count > 0)
             throw new InvalidDataException("链路加载校验失败:\n  " + string.Join("\n  ", errors));
+    }
+
+    /// <summary>死步骤可达性分析（纯函数，可单测）：从入口步骤 1 出发，沿"顺序执行落到下一步"与"跳转边"
+    /// （jump / switch_screen 分流 / if_*、wait_screen 超时跳转 / click_element 失败软跳转）计算可达集合，
+    /// 返回不可达步骤的下标（0 基）。跳转边宁多勿漏（目标缺失时忽略），保证只真报死步骤不误报。</summary>
+    public static IReadOnlyList<int> FindUnreachableSteps(List<ChainStep> steps)
+    {
+        var reach = new bool[steps.Count];
+        var pending = new Stack<int>();
+
+        void Visit(int i)
+        {
+            if (i >= 0 && i < steps.Count && !reach[i])
+            {
+                reach[i] = true;
+                pending.Push(i);
+            }
+        }
+
+        int IdxOf(string? id) => steps.FindIndex(s => s.Id == id);
+
+        Visit(0);
+        while (pending.Count > 0)
+        {
+            int i = pending.Pop();
+            var s = steps[i];
+            switch (s.Op)
+            {
+                case "jump": // 必跳，无落下一步路径
+                    Visit(IdxOf(s.JumpTo));
+                    break;
+                case "switch_screen": // 查表分流必跳（无 default 且未匹配会抛错），无落下一步路径
+                    if (s.Branches != null)
+                        foreach (var t in s.Branches.Values) Visit(IdxOf(t));
+                    Visit(IdxOf(s.Default));
+                    break;
+                case "click_element":   // 成功落下一步；expect_screen 失败软跳转
+                case "if_screen":       // 未命中落下一步；命中跳转
+                case "if_template":
+                case "if_ocr":
+                case "wait_screen":     // 达成落下一步；超时软跳转
+                    Visit(i + 1);
+                    Visit(IdxOf(s.JumpTo));
+                    break;
+                default: // key/wait/pause/detect/mark_unknown/pick_operator：纯顺序执行
+                    Visit(i + 1);
+                    break;
+            }
+        }
+
+        var unreachable = new List<int>();
+        for (int i = 0; i < reach.Length; i++)
+            if (!reach[i]) unreachable.Add(i);
+        return unreachable;
     }
 }
