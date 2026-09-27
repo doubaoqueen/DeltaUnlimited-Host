@@ -3,6 +3,7 @@ using System.Text;
 using System.Windows.Forms;
 using DeltaUnlimited.Data;
 using DeltaUnlimited.Gui;
+using DeltaUnlimited.Overlay;
 using OpenCvSharp;
 
 namespace DeltaUnlimited.Cli.Commands;
@@ -19,7 +20,9 @@ public static class AiLabelCommand
         var cfg = data.LoadAiVision();
         using var store = AiLabelStore.Load(repoRoot, cfg, runtime.DesignWidth, runtime.DesignHeight);
         Console.WriteLine($"AI 标注器：共 {store.RowCount} 帧，未标 {store.UnlabeledCount}（{store.RecordDir}）");
-        Console.WriteLine("窗口内按键：1=可通行 2=不可通行 0=无地面 B=背景 X=丢弃 ←→=翻张 N=下一个未标 Esc=退出");
+        if (store.MissingCount > 0)
+            Console.WriteLine($"⚠ {store.MissingCount} 帧清单有记录但全帧文件已不在（可能被手动清理）——窗口内按 M 一键丢弃，或 X 逐张丢弃");
+        Console.WriteLine("窗口内按键：1=可通行 2=不可通行 0=无地面 B=背景 X=丢弃 M=清理缺失帧 ←→=翻张 N=下一个未标 Esc=退出");
 
         // 控制台入口线程是 MTA，WinForms 必须在专用 STA 线程上跑消息循环（同 GuiApp 模式）
         var ui = new Thread(() =>
@@ -41,9 +44,13 @@ public static class AiLabelCommand
 /// <summary>图像辅助：加载/画 ROI 框/裁 ROI/Mat→Bitmap。集中在此，窗体只接触 Bitmap。</summary>
 internal static class AiLabelImaging
 {
-    /// <summary>ImDecode 走 .NET IO 读字节，规避 imread 对非 ASCII 路径的编码问题。</summary>
+    /// <summary>ImDecode 走 .NET IO 读字节，规避 imread 对非 ASCII 路径的编码问题；解码失败/空图一律返回 null。</summary>
     public static Mat? LoadFrame(string absPath)
-        => File.Exists(absPath) ? Cv2.ImDecode(File.ReadAllBytes(absPath), ImreadModes.Color) : null;
+    {
+        if (!File.Exists(absPath)) return null;
+        var m = Cv2.ImDecode(File.ReadAllBytes(absPath), ImreadModes.Color);
+        return m.Empty() ? null : m;
+    }
 
     public static Rect RoiRect(AiVisionConfig cfg, int designW, int designH)
     {
@@ -106,6 +113,43 @@ internal sealed class AiLabelStore : IDisposable
     public bool HasFrame => _frame is not null;
     public IReadOnlyDictionary<string, int> TrainCounts { get; private set; } = new Dictionary<string, int>();
 
+    /// <summary>清单有记录但全帧文件已不在磁盘的数量（可能被手动清理；这类帧无法打标，只能丢弃或忽略）。</summary>
+    public int MissingCount
+    {
+        get
+        {
+            int n = 0;
+            for (int i = 0; i < _rows.Count; i++)
+                if (!FileExists(i)) n++;
+            return n;
+        }
+    }
+
+    public bool FileExists(int index)
+        => index >= 0 && index < _rows.Count && File.Exists(Path.Combine(_recordDir, _rows[index].RelPath));
+
+    /// <summary>第一个文件完好的行号；全缺失返回 -1。</summary>
+    public int FirstViewable()
+    {
+        for (int i = 0; i < _rows.Count; i++)
+            if (FileExists(i)) return i;
+        return -1;
+    }
+
+    /// <summary>一键丢弃所有"未标注且文件缺失"的帧（已标注的帧其 ROI 已在训练清单里，不动）。返回处理数量。</summary>
+    public int DiscardMissing()
+    {
+        int n = 0;
+        for (int i = 0; i < _rows.Count; i++)
+        {
+            var row = _rows[i];
+            if (row.Label.Length != 0) continue;
+            if (FileExists(i)) continue;
+            if (SetLabel(i, "discard")) n++;
+        }
+        return n;
+    }
+
     public static AiLabelStore Load(string repoRoot, AiVisionConfig cfg, int designW, int designH)
     {
         string recordDir = Path.Combine(repoRoot, "ai-training", "datasets", "record");
@@ -148,29 +192,46 @@ internal sealed class AiLabelStore : IDisposable
         return store;
     }
 
-    /// <summary>打开某索引的全帧（先关旧帧）。返回文件是否存在。</summary>
+    /// <summary>打开某索引的全帧（先关旧帧）。返回文件是否存在且可解码。</summary>
     public bool Open(int index)
     {
         _frame?.Dispose();
         _frame = null;
         if (index < 0 || index >= _rows.Count) return false;
-        _frame = AiLabelImaging.LoadFrame(Path.Combine(_recordDir, _rows[index].RelPath));
+        try
+        {
+            _frame = AiLabelImaging.LoadFrame(Path.Combine(_recordDir, _rows[index].RelPath));
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"AI 标注器：帧加载异常 {ex.Message}");
+            _frame = null;
+        }
         return _frame is not null;
     }
 
-    /// <summary>当前帧整图 + ROI 绿框（展示用）。</summary>
+    /// <summary>当前帧整图 + ROI 绿框（展示用）。渲染异常返回 null，绝不抛到 UI 线程。</summary>
     public Bitmap? RenderFull()
-        => _frame is null ? null : AiLabelImaging.ToBitmap(AiLabelImaging.DrawRoiBox(_frame, _roi));
+    {
+        if (_frame is null) return null;
+        try { return AiLabelImaging.ToBitmap(AiLabelImaging.DrawRoiBox(_frame, _roi)); }
+        catch (Exception ex) { Logger.Warn($"AI 标注器：整图渲染失败 {ex.Message}"); return null; }
+    }
 
-    /// <summary>当前帧的 ROI 裁剪（模型实际视野）。</summary>
+    /// <summary>当前帧的 ROI 裁剪（模型实际视野）。渲染异常返回 null。</summary>
     public Bitmap? RenderRoi()
     {
         if (_frame is null) return null;
-        using var crop = new Mat(_frame, _roi).Clone();
-        return AiLabelImaging.ToBitmap(crop);
+        try
+        {
+            using var crop = new Mat(_frame, _roi).Clone();
+            return AiLabelImaging.ToBitmap(crop);
+        }
+        catch (Exception ex) { Logger.Warn($"AI 标注器：ROI 渲染失败 {ex.Message}"); return null; }
     }
 
-    /// <summary>打标/复标（使用当前打开的帧裁 ROI）。返回是否发生了修改。</summary>
+    /// <summary>打标/复标（使用当前打开的帧裁 ROI）。返回是否发生了修改。
+    /// 顺序上先做可能失败的写盘（新 ROI 落盘），成功后才改清单——失败即无副作用，不留半截状态。</summary>
     public bool SetLabel(int index, string label)
     {
         if (index < 0 || index >= _rows.Count) return false;
@@ -178,9 +239,33 @@ internal sealed class AiLabelStore : IDisposable
         if (row.Label == label) return false;
         bool oldIsTrain = TrainLabels.Contains(row.Label);
         bool newIsTrain = TrainLabels.Contains(label);
-        if (newIsTrain && _frame is null) return false; // 全帧缺失无法裁 ROI，先于清旧判断，保证失败不留半截状态
+        if (newIsTrain && _frame is null) return false;
 
-        // 1) 清旧：复标/改丢弃时，删训练清单旧行 + 旧 ROI 文件
+        // 1) 新 ROI 落盘（discard 不进训练清单，无需裁图）
+        string? trainRel = null;
+        if (newIsTrain)
+        {
+            try
+            {
+                string relDir = Path.Combine("images", label);
+                Directory.CreateDirectory(Path.Combine(_passabilityDir, relDir));
+                string file = $"roi_{DateTime.Now:yyyyMMdd_HHmmss_fff}.jpg";
+                while (File.Exists(Path.Combine(_passabilityDir, relDir, file)))
+                    file = $"roi_{DateTime.Now:yyyyMMdd_HHmmss_fff}_{Random.Shared.Next(100, 999)}.jpg";
+                trainRel = Path.Combine(relDir, file);
+                using var crop = new Mat(_frame!, _roi).Clone();
+                if (!crop.ImWrite(Path.Combine(_passabilityDir, trainRel),
+                        new[] { (int)ImwriteFlags.JpegQuality, _cfg.Log.RoiJpegQuality }))
+                    throw new IOException($"ROI 保存失败: {trainRel}");
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn($"AI 标注器：打标写盘失败，标签未变更（{ex.Message}）");
+                return false;
+            }
+        }
+
+        // 2) 清旧：复标/改丢弃时，删训练清单旧行 + 旧 ROI 文件
         if (oldIsTrain && _trainByRecord.TryGetValue(row.RelPath, out var oldTrainRel))
         {
             _trainLines.RemoveAll(l => l.StartsWith(oldTrainRel + ",", StringComparison.Ordinal));
@@ -188,23 +273,12 @@ internal sealed class AiLabelStore : IDisposable
             _trainByRecord.Remove(row.RelPath);
         }
 
-        // 2) 写新：裁 ROI 存盘 + 追加训练清单 + 记映射（discard 不进训练清单）
-        if (newIsTrain)
+        // 3) 记新：追加训练清单 + 映射 + 行标签 + 落盘
+        if (trainRel is not null)
         {
-            string relDir = Path.Combine("images", label);
-            Directory.CreateDirectory(Path.Combine(_passabilityDir, relDir));
-            string file = $"roi_{DateTime.Now:yyyyMMdd_HHmmss_fff}.jpg";
-            while (File.Exists(Path.Combine(_passabilityDir, relDir, file)))
-                file = $"roi_{DateTime.Now:yyyyMMdd_HHmmss_fff}_{Random.Shared.Next(100, 999)}.jpg";
-            string trainRel = Path.Combine(relDir, file);
-            using var crop = new Mat(_frame!, _roi).Clone();
-            if (!crop.ImWrite(Path.Combine(_passabilityDir, trainRel),
-                    new[] { (int)ImwriteFlags.JpegQuality, _cfg.Log.RoiJpegQuality }))
-                throw new IOException($"ROI 保存失败: {trainRel}");
             _trainLines.Add($"{trainRel},{label},{row.Map},{row.Season},record,{row.Created}");
             _trainByRecord[row.RelPath] = trainRel;
         }
-
         row.Label = label;
         Flush();
         Recount();

@@ -45,10 +45,12 @@ public sealed class AiLabelForm : Form
         NewLabel(984, 262, 480, 150, out _lblInfo);
         NewLabel(984, 420, 480, 96, out _lblStats);
         NewLabel(12, 566, 1452, 60, out _lblKeys);
-        _lblKeys.Text = "1=可通行(passable)   2=不可通行(blocked)   0=无地面(no_ground)   B=背景(background)   X=丢弃(discard)\n" +
+        _lblKeys.Text = "1=可通行(passable)   2=不可通行(blocked)   0=无地面(no_ground)   B=背景(background)   X=丢弃(discard)   M=一键丢弃文件缺失的帧\n" +
                         "←/→=上一张/下一张   N=下一个未标   Esc=退出。每次打标即时写盘，无需保存；回翻旧图按键即可复标。";
 
-        MoveTo(0);
+        // 启动定位到第一个文件完好的帧——清单里可能混有已被手动清理的帧，别让空白画面当门面
+        int first = _store.FirstViewable();
+        MoveTo(first >= 0 ? first : 0);
     }
 
     private void NewLabel(int x, int y, int w, int h, out Label lbl)
@@ -73,6 +75,7 @@ public sealed class AiLabelForm : Form
             case Keys.D0: Apply("no_ground"); break;
             case Keys.B: Apply("background"); break;
             case Keys.X: Apply("discard"); break;
+            case Keys.M: ApplyDiscardMissing(); break;
             case Keys.Right: MoveTo(_index + 1); break;
             case Keys.Left: MoveTo(_index - 1); break;
             case Keys.N: NextUnlabeled(); break;
@@ -89,7 +92,7 @@ public sealed class AiLabelForm : Form
         if (row.Label == label) return; // 重复按键无操作
         if (AiLabelStore.TrainLabels.Contains(label) && !_store.HasFrame)
         {
-            _lblInfo.Text = "⚠ 全帧文件缺失，无法裁 ROI——可按 X 丢弃此帧，或 → 跳过";
+            _lblInfo.Text = "⚠ 全帧文件缺失，无法裁 ROI——按 M 一键清理所有缺失帧，或按 X 丢弃此帧，或 → 跳过";
             return;
         }
 
@@ -101,16 +104,29 @@ public sealed class AiLabelForm : Form
         else MoveTo(_index);
     }
 
+    private void ApplyDiscardMissing()
+    {
+        int n = _store.DiscardMissing();
+        if (n > 0) NextUnlabeled(); // 丢弃后已无缺失未标帧，回到可标注流
+        else MoveTo(_index);
+    }
+
     private void NextUnlabeled()
     {
         int n = _store.RowCount;
-        for (int step = 1; step <= n; step++)
+        if (n == 0) return;
+        // 两轮扫描：优先未标且文件完好的（能裁 ROI 的）；没有才落回"未标但文件缺失"（只能 X/M 处理）
+        for (int pass = 0; pass < 2; pass++)
         {
-            int i = (_index + step) % n;
-            if (_store.Rows[i].Label.Length == 0)
+            for (int step = 1; step <= n; step++)
             {
-                MoveTo(i);
-                return;
+                int i = (_index + step) % n;
+                if (_store.Rows[i].Label.Length != 0) continue;
+                if (pass == 0 ? _store.FileExists(i) : !_store.FileExists(i))
+                {
+                    MoveTo(i);
+                    return;
+                }
             }
         }
         MoveTo(_index); // 全部标完，停在原地
@@ -135,7 +151,7 @@ public sealed class AiLabelForm : Form
         RefreshImages(loaded ? _store.RenderFull() : null, loaded ? _store.RenderRoi() : null);
         _lblInfo.Text = $"[{_index + 1}/{n}]  {row.RelPath}\n" +
                         $"地图 {row.Map}｜赛季 {row.Season}｜采集于 {row.Created}\n" +
-                        "状态: " + (!loaded ? "⚠ 全帧文件缺失（可按 X 丢弃，→ 跳过）"
+                        "状态: " + (!loaded ? "⚠ 全帧文件缺失（按 M 一键清理缺失帧 / X 丢弃此帧 / → 跳过）"
                                            : row.Label.Length == 0 ? "未标注" : row.Label + "（回翻可复标）");
         Text = $"AI 素材标注器 —— 未标 {_store.UnlabeledCount}/{_store.RowCount}" +
                (_store.UnlabeledCount == 0 ? " ✅全部标完" : "");
@@ -145,8 +161,10 @@ public sealed class AiLabelForm : Form
     {
         SetImage(_pbFull, full);
         SetImage(_pbRoi, roi);
-        _lblStats.Text = $"未标 {_store.UnlabeledCount} / 共 {_store.RowCount}\n" +
-                         "训练清单: " + ( _store.TrainCounts.Count == 0
+        int missing = _store.MissingCount;
+        _lblStats.Text = $"未标 {_store.UnlabeledCount} / 共 {_store.RowCount}" +
+                         (missing > 0 ? $"｜⚠ 文件缺失 {missing}" : "") + "\n" +
+                         "训练清单: " + (_store.TrainCounts.Count == 0
                              ? "（空）"
                              : string.Join("  ", _store.TrainCounts.Select(kv => $"{kv.Key}:{kv.Value}")));
     }
