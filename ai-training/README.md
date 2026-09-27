@@ -18,8 +18,13 @@ pip install onnx onnxruntime numpy pillow
 ## 数据闭环（对应设计文档 §5）
 
 ```
-① 采集   dotnet run -- aicollect --map 零号大坝 --season sX
-          （边玩边标：1=可通行 2=不可通行 0=无地面 b=背景）
+① 采集   两条路线任选/混用：
+   a) dotnet run -- aicollect --map 零号大坝 --season sX
+      （边玩边标：1=可通行 2=不可通行 0=无地面 b=背景；注意控制台要持有焦点）
+   b) dotnet run -- airecord --map 零号大坝 --season sX   ← 推荐：零按键不打断游戏
+      （自动存全帧到 datasets/record/，标签留空；帧差跳静止帧；全帧将来直接喂 YOLO）
+      然后 dotnet run -- ailabel  （图形界面逐张打标，1/2/0/b=标签 X=丢弃 N=下一个未标，
+      裁 ROI 自动写入下方 passability 目录，复标自动搬移旧文件）
           → ai-training/datasets/passability/{images/, manifest.csv}
 ② 人工补标/清洗：直接改 manifest.csv（label 列）；错误样本删行+删图
 ③ 训练   python src/train.py --data datasets/passability --epochs 30
@@ -40,6 +45,8 @@ pip install onnx onnxruntime numpy pillow
 | env/img-train.yml | ✅ | conda 环境描述 |
 | datasets/passability/manifest.csv | ✅ | 标签清单（relpath,label,map,season,source,created） |
 | datasets/passability/images/ | ❌ | 真实图像，gitignore（另盘备份） |
+| datasets/record/*.csv | ✅ | 录制清单与标注映射（relpath,label,map,season,created） |
+| datasets/record/full/ | ❌ | 录制全帧归档（gitignore；ailabel 的 ROI 裁剪与将来 YOLO 素材来源） |
 | runs/ | ❌ | checkpoint 与训练曲线，gitignore |
 
 ## 红线（与项目总红线一致）

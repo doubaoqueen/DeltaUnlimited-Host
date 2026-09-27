@@ -17,6 +17,8 @@ public static class Usage
               drill [圈数] [窗口关键字]           靶场自主行进循环（帧差确认+自动重试+急停）
               patrol [秒数] [阈值] [连续] [90°px] [窗口]   反应式巡逻 v2：贴墙停+横移低效双守卫，自动转向
               aicollect [--map 地图] [--season 赛季]  可通行性数据采集（边玩边标: 1/2/0/b）
+              airecord [--map 地图] [--season 赛季] [--interval 毫秒] [--max-gb 上限]   素材录制器（零按键自动存全帧，事后 ailabel 标注）
+              ailabel                            素材标注器（图形界面: 1/2/0/b 打标写回训练 manifest）
               aieval [模型] [数据集目录]         三分类评估（混淆矩阵/macro-F1，金标集门禁离线版）
               chain <workflow文件> [--auto]        按 JSON 步骤执行链路（detect/if_screen 分支/jump）
               crop <x> <y> <w> <h> <源图> [输出] [缩放]   从截图裁模板小图（可缩放换算设计分辨率）

@@ -51,6 +51,8 @@ try
         case "drill": DrillCommand.Run(store, root, args); break;
         case "patrol": PatrolCommand.Run(store, root, args); break;
         case "aicollect": AiCollectCommand.Run(store, root, args); break;
+        case "airecord": AiRecordCommand.Run(store, root, args); break;
+        case "ailabel": AiLabelCommand.Run(store, root, args); break;
         case "aieval": AiEvalCommand.Run(store, root, args); break;
         case "chain": ChainCommand.Run(store, root, args); break;
         case "crop": CropCommand.Run(root, args); break;
