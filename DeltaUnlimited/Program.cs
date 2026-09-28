@@ -54,6 +54,7 @@ try
         case "airecord": AiRecordCommand.Run(store, root, args); break;
         case "ailabel": AiLabelCommand.Run(store, root, args); break;
         case "roitune": RoiTuneCommand.Run(store, root, args); break;
+        case "aiprobe": AiProbeCommand.Run(store, root, args); break;
         case "aieval": AiEvalCommand.Run(store, root, args); break;
         case "chain": ChainCommand.Run(store, root, args); break;
         case "crop": CropCommand.Run(root, args); break;

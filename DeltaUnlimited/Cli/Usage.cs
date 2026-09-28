@@ -20,6 +20,7 @@ public static class Usage
               airecord [--map 地图] [--season 赛季] [--interval 毫秒] [--max-gb 上限]   素材录制器（默认1-2s随机一帧，零按键，事后 ailabel 标注）
               ailabel                            素材标注器（图形界面：左手 A/S/D/F 打标，右手 ←/→ 翻页，N 跳下一未标；兼容 1/2/0/B）
               roitune [截图路径]                  ROI 调参器（实时对游戏画面/静态图移动绿框，回车保存 ai_vision.json）
+              aiprobe [图片路径...]               AI 探针：实时（对游戏画面）/静态（对截图）显示可通行性判定
               aieval [模型] [数据集目录]         三分类评估（混淆矩阵/macro-F1，金标集门禁离线版）
               chain <workflow文件> [--auto]        按 JSON 步骤执行链路（detect/if_screen 分支/jump）
               crop <x> <y> <w> <h> <源图> [输出] [缩放]   从截图裁模板小图（可缩放换算设计分辨率）
