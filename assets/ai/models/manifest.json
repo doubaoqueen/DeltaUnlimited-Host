@@ -1,9 +1,29 @@
 {
-  "file": "passability_v0_placebo.onnx",
-  "classes": ["passable", "blocked", "no_ground"],
-  "input": { "height": 112, "width": 224, "layout": "NCHW", "color": "RGB" },
-  "preprocess": { "mean": [0.485, 0.456, 0.406], "std": [0.229, 0.224, 0.225] },
-  "trained_on_game_version": "v0-placebo（随机权重，仅供管线联调，不可用于生产判断）",
-  "created": "2026-09-27",
+  "file": "passability_v1.onnx",
+  "classes": [
+    "passable",
+    "blocked",
+    "no_ground"
+  ],
+  "input": {
+    "height": 112,
+    "width": 224,
+    "layout": "NCHW",
+    "color": "RGB"
+  },
+  "preprocess": {
+    "mean": [
+      0.485,
+      0.456,
+      0.406
+    ],
+    "std": [
+      0.229,
+      0.224,
+      0.225
+    ]
+  },
+  "trained_on_game_version": "v1（2026-09-29，零号大坝 s5，429 帧人工标注，val macro-F1 0.8722）",
+  "created": "2026-09-29",
   "note": "正式模型经 ai-training/src/export_onnx.py 导出为 passability_vN.onnx 后，同步更新 data/ai_vision.json 的 model 字段与本文件的 file/classes"
 }
