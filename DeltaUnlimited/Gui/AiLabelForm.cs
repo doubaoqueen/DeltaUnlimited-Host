@@ -45,8 +45,8 @@ public sealed class AiLabelForm : Form
         NewLabel(984, 262, 480, 150, out _lblInfo);
         NewLabel(984, 420, 480, 96, out _lblStats);
         NewLabel(12, 566, 1452, 60, out _lblKeys);
-        _lblKeys.Text = "1=可通行(passable)   2=不可通行(blocked)   0=无地面(no_ground)   B=背景(background)   X=丢弃(discard)   M=一键丢弃文件缺失的帧\n" +
-                        "←/→=上一张/下一张   N=下一个未标   Esc=退出。每次打标即时写盘，无需保存；回翻旧图按键即可复标。";
+        _lblKeys.Text = "左手打标：A=可通行(passable)  S=不可通行(blocked)  D=无地面(no_ground)  F=背景(background)  X=丢弃(discard)   右手翻页：←/→  N=下一个未标  M=清理缺失帧  Esc=退出\n" +
+                        "数字键 1/2/0/B 仍兼容（与 aicollect 同键位）。每次打标即时写盘，无需保存；回翻旧图按键即可复标。";
 
         // 启动定位到第一个文件完好的帧——清单里可能混有已被手动清理的帧，别让空白画面当门面
         int first = _store.FirstViewable();
@@ -70,10 +70,10 @@ public sealed class AiLabelForm : Form
         base.OnKeyDown(e);
         switch (e.KeyCode)
         {
-            case Keys.D1: Apply("passable"); break;
-            case Keys.D2: Apply("blocked"); break;
-            case Keys.D0: Apply("no_ground"); break;
-            case Keys.B: Apply("background"); break;
+            case Keys.A or Keys.D1: Apply("passable"); break;
+            case Keys.S or Keys.D2: Apply("blocked"); break;
+            case Keys.D or Keys.D0: Apply("no_ground"); break;
+            case Keys.B or Keys.F: Apply("background"); break;
             case Keys.X: Apply("discard"); break;
             case Keys.M: ApplyDiscardMissing(); break;
             case Keys.Right: MoveTo(_index + 1); break;
