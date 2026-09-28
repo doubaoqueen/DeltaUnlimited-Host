@@ -14,7 +14,8 @@
 | 安全 | 急停自动释放所有按键；点击落点校验（偏差超容差 → 钉正 → 仍偏放弃点击，fail-open）；窗口坐标换算（窗口化/DPI 缩放下点击精确）；所有未知/异常界面默认暂停人工确认 |
 | 可观测 | 控制台 + 按日滚动 `logs/status_*.log`；游戏画面上可拖动的悬浮状态面板（`overlay`）；`ocr`/`tplprobe` 诊断命令；链路每步截图留证 |
 | 图形界面 | **GUI 控制面板**（G2）：工作流/模式选择、**一键开始/急停**（后台执行链路，急停三路同源：按钮/Ctrl+C/暂停面板"中止"，任何路径释放全部按键）、**暂停点人工确认面板**（半自动模式）、实时日志窗（封顶+自动滚屏+清空）、系统托盘（收托盘/双击恢复/开始/急停/退出菜单/链路结束气泡通知） |
-| 里程碑 | ✅ 进场链路端到端真机验证（2026-09-21）；✅ 干员选择真机验证 + 窗口坐标换算/点击安全网修复（2026-09）；🚧 GUI 控制面板 G1（2026-09） |
+| AI 视觉感知与数据闭环 | **可通行性三分类传感器**（阶段1：ONNX 推理，DirectML GPU 优先/CPU 兜底；observe-only 默认，enforce 走既有 Escalate；金标集门禁+运行时矛盾率双防漂移）+ **训练全链**：`airecord` 零按键录制器（全帧归档，一次录制喂所有模型）→ `ailabel` 图形化事后标注（裁 ROI 写回 manifest，支持复标/缺失帧清理）→ `ai-training` 训练（MobileNetV3-Small，torch cu128，含 `smoke_test` 链路自检）→ `export_onnx` 导出 → `aieval` 金标门禁 → `import_jsonl` 日志回流；`roitune` ROI 调参器（实时移动绿框标定模型视野）。详见 `docs/AI训练侦查报告.md`、`docs/AI训练学习路径.md`、`ai-training/README.md` |
+| 里程碑 | ✅ 进场链路端到端真机验证（2026-09-21）；✅ 干员选择真机验证 + 窗口坐标换算/点击安全网修复（2026-09）；🚧 GUI 控制面板 G1（2026-09）；🚧 AI 可通行性 v1（管线+工具已就绪，素材采集/训练中，2026-09） |
 
 ## 设计哲学
 
@@ -63,6 +64,11 @@ dotnet run -- drill [圈数]              # 靶场四边回路
 dotnet run -- patrol [秒]               # 靶场反应式巡逻
 dotnet run -- overlay                   # 悬浮状态面板（另开终端常驻）
 dotnet run -- windows                   # 列出可见顶层窗口
+dotnet run -- airecord [--map 地图] [--season 赛季]   # AI 素材录制器（零按键自动存全帧，采集标注分离·推荐）
+dotnet run -- ailabel                   # AI 素材标注器（图形界面：1/2/0/b 打标写回训练 manifest）
+dotnet run -- aicollect [--map 地图] [--season 赛季]  # 可通行性边玩边标（控制台抢焦点，备用路线）
+dotnet run -- roitune [截图路径]         # ROI 调参器（实时移动绿框标定模型视野，回车保存 ai_vision.json）
+dotnet run -- aieval                    # 三分类评估（金标集门禁，混淆矩阵/macro-F1）
 ```
 
 ## 待办路线
@@ -74,6 +80,7 @@ dotnet run -- windows                   # 列出可见顶层窗口
 5. 全局急停热键（F8，不依赖控制台焦点）
 6. 链路结构/速度优化：`switch_screen` 查表分流已完成（v7，112步→~64步）+ 同帧词表缓存（OCR 16次→~7次）；待真机量测单次识别 &lt;1.5s 后再降轮询/固定等待
 7. **GUI**：BetterGI 式桌面窗口 + 悬浮面板 + 一键开始/急停（远期 ComfyUI 节点编排器）；CLI 保留为诊断后门 —— 🚧 **G1 主窗口+托盘+日志窗已落地、G2 开始/急停+暂停面板已接线**（2026-09）；G3 打磨（状态可视化/设置记忆/悬浮面板整合）
+8. **AI 可通行性 v1**：ROI 已标定（`roitune`，[416,592,1088,388] → 等比输入 80×224）→ 素材采集夜（airecord/ailabel）→ 训练 + 金标门禁（macro-F1 ≥ 0.85）→ observe-only 观察 → enforce —— 路线与训练方案见 `docs/AI训练侦查报告.md`
 
 ## 版本
 

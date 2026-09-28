@@ -4,7 +4,7 @@
 CLASSES = ("passable", "blocked", "no_ground")
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
-INPUT_SIZE = (112, 224)  # (H, W)，与 data/ai_vision.json 的 input_size 一致
+INPUT_SIZE = (80, 224)  # (H, W)，与 data/ai_vision.json 的 input_size 一致（ROI 1088×388 ≈ 2.8:1 等比映射）
 
 
 def build_mbv3s(num_classes: int = 3, pretrained: bool = True):
