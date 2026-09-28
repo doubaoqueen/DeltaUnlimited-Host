@@ -370,6 +370,7 @@ tests/fixtures/
 ai-training/datasets/passability/images/
 ai-training/datasets/record/full/
 ai-training/runs/
+ai-training/.venv-smoke/
 
 
 # 其他 AI 工具工件

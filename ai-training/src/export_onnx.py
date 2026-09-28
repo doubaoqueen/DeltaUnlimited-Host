@@ -20,7 +20,7 @@ def main():
     args = ap.parse_args()
 
     ckpt = torch.load(args.ckpt, map_location="cpu", weights_only=False)
-    model = build(ckpt["model"], num_classes=len(ckpt["classes"]))
+    model = build(ckpt["model"], num_classes=len(ckpt["classes"]), pretrained=False)
     model.load_state_dict(ckpt["state"])
     model.eval()
 

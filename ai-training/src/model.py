@@ -7,12 +7,13 @@ IMAGENET_STD = (0.229, 0.224, 0.225)
 INPUT_SIZE = (112, 224)  # (H, W)，与 data/ai_vision.json 的 input_size 一致
 
 
-def build_mbv3s(num_classes: int = 3):
-    """MobileNetV3-Small（运行时基准 ~0.8ms/帧 @4线程桌面 CPU）。"""
+def build_mbv3s(num_classes: int = 3, pretrained: bool = True):
+    """MobileNetV3-Small（运行时基准 ~0.8ms/帧 @4线程桌面 CPU）。
+    默认加载 ImageNet 预训练骨干——小数据集上迁移学习明显优于从零训练；--scratch 对照用 weights=None。"""
     import torch.nn as nn
     from torchvision.models import mobilenet_v3_small
 
-    m = mobilenet_v3_small(weights=None)
+    m = mobilenet_v3_small(weights="IMAGENET1K_V1" if pretrained else None)
     m.classifier[3] = nn.Linear(1024, num_classes)
     return m
 
@@ -32,5 +33,6 @@ def build_tiny(num_classes: int = 3):
     )
 
 
-def build(name: str, num_classes: int = 3):
-    return build_tiny(num_classes) if name == "tiny" else build_mbv3s(num_classes)
+def build(name: str, num_classes: int = 3, pretrained: bool = True):
+    """评估/导出场景务必传 pretrained=False——权重马上由 checkpoint 覆盖，联网下载纯属浪费。"""
+    return build_tiny(num_classes) if name == "tiny" else build_mbv3s(num_classes, pretrained)

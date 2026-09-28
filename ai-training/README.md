@@ -35,6 +35,7 @@ pip install onnx onnxruntime numpy pillow
 ⑤ 验证   dotnet run -- aieval                       （金标集离线门禁）
 ⑥ 重建金标集：新版本稳定后挑 ~100 张更新 assets/ai/golden/
 ⑦ 矛盾回流：python src/import_jsonl.py              （logs/ai 运行日志 → 人工复标队列）
+⑧ 链路自检：python src/smoke_test.py                （伪造小数据集跑通 train→export→evaluate，不依赖真实素材）
 ```
 
 ## 目录约定
