@@ -59,7 +59,7 @@ wsl -e bash -c 'export HF_HUB_CACHE=/mnt/d/hf-cache HF_ENDPOINT=https://hf-mirro
 | time_weather | 白天/黄昏/夜战/雾天/未知 | 环境元数据（覆盖矩阵的账本） |
 | has_enemy / has_loot_signal / has_prompt | 金帧标记 | **YOLO 素材池**（N5 画框优先从这挑） |
 | quality | 清晰/模糊/黑屏/过曝 | 黑屏过曝淘汰 |
-| confidence | 0-1 | 0.5-0.8 的边界帧**优先人工复核** |
+| confidence | 0-1 | ⚠️ 实测区分度低（v2 prompt 首轮全 ≥0.8），**勿作复核优先级依据**；改 prompt 后重新观察 |
 | error | 失败原因（空=成功） | 非空行不计入漏斗 |
 
 **漏斗读法**（脚本结束会打印）：`初筛总数 → roi_usable=true（待人工）+ 金帧（YOLO 池）`。原则：**被淘汰的帧不是丢了**，只是不值得人工看，随时 `--refresh` 可重筛。
@@ -78,7 +78,8 @@ wsl -e bash -c 'export HF_HUB_CACHE=/mnt/d/hf-cache HF_ENDPOINT=https://hf-mirro
 1. **别让 VLM 碰金标集**（红线 2，重复一遍因为最致命）。
 2. **锚定效应**：看完 VLM 预判再打标，人会被它带偏——如果发现打标速度变快但"和它一致率"高得可疑，停下来盲标几张校准自己。
 3. **抽检义务**：VLM 会一本正经地胡说（幻觉率 1-5%），每轮全量初筛后必须抽检；错误集中在哪类（比如夜战全判错），就在下一轮 prompt 里补描述。
-4. **prompt 是版本化的**：改 PROMPT 后旧结果不可比，必须 `--refresh` 重筛，并在 prescreen.csv 记一句改版原因（手动另存备份）。
+4. **prompt 是版本化的**：改 PROMPT 后旧结果不可比，必须 `--refresh` 重筛。
+   **v2（2026-09-29）修订记录**：首轮 v1 prompt 出现两类语义漂移——① `occlusion=UI覆盖` 占 81%（模型把整帧的正常 HUD 当成了遮挡）；② 金帧检测过敏（结算界面的物品图标被算成 has_prompt）。v2 把 occlusion 显式限定为"只评价图2 区域"，金帧三项显式排除"菜单/结算/背包里的图标"，并把各字段的判定定义写进 prompt。
 5. **图片分辨率固定发 1280 宽**：更大会爆显存/变慢，更小会丢判断依据——改了就要重筛。
 6. **服务空闲也占 9.6GB 显存**：不用的时候停掉，别让训练排队等一个闲着的服务。
 7. **失败行不重试自动跳过**：单帧失败（网络抖动/解析失败）会记 error 列继续下一张——跑完后对 error 非空的行单独重跑一次（`--refresh` 会全量重筛，建议此时手动删掉 error 行的 relpath 或整表重筛）。

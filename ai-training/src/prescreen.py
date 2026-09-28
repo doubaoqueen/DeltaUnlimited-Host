@@ -27,8 +27,18 @@ REPO = ROOT.parent
 FIELDS = ["relpath", "scene", "roi_usable", "occlusion", "time_weather",
           "has_enemy", "has_loot_signal", "has_prompt", "quality", "confidence", "error"]
 
-PROMPT = """你是游戏画面数据质检员。图1是 1920×1080 的游戏整帧，图2是从画面中央偏下裁出的"地面区域"（训练模型实际看到的区域）。只输出一个 JSON 对象，不要输出任何其他文字、不要用 markdown 代码块：
-{"scene": "对局内|大厅|加载|死亡|结算|收获|其他", "roi_usable": true或false, "occlusion": "无|UI覆盖|贴脸遮挡|天空|大面积特效", "time_weather": "白天|黄昏|夜战|雾天|未知", "has_enemy": true或false, "has_loot_signal": true或false, "has_prompt": true或false, "quality": "清晰|模糊|黑屏|过曝", "confidence": 0.0到1.0的小数}"""
+PROMPT = """你是游戏画面数据质检员。图1是 1920×1080 的游戏整帧，图2是从整帧中央偏下裁出的"地面区域"小图（训练模型实际只看这块区域）。
+按以下定义逐项判断，只输出一个 JSON 对象，不要输出任何其他文字、不要用 markdown 代码块：
+- scene：图1 的界面类型。对局内=第一人称游戏画面且带 HUD；大厅/加载/死亡/结算/收获=对应菜单或结算界面。
+- roi_usable：只看图2——是否为"可判定能否通行的地面画面"。图2 里应主要是地面/道路/障碍物；若是天空、被面板盖住、或贴脸怼墙看不清则为 false。注意：图1 的 HUD（小地图/罗盘/血条）不在图2 里，与本项无关。
+- occlusion：只评价图2 区域：无|UI覆盖(面板/弹窗盖住了图2)|贴脸遮挡(怼墙)|天空|大面积特效。
+- time_weather：图1 的时段天气：白天|黄昏|夜战|雾天|未知。
+- has_enemy：图1 的游戏世界内可见的敌方角色模型。结算/背包/大厅界面的头像、图标不算。
+- has_loot_signal：图1 的游戏世界内可见的金光柱/物资箱高光/尸体袋。结算界面和背包里的物品图标不算。
+- has_prompt：图1 游戏画面准星附近出现的交互键位提示（如 [F] 拾取/开门）。菜单按钮、结算界面的图标不算。
+- quality：图1 画质：清晰|模糊|黑屏|过曝。
+- confidence：你对以上判断的自信程度，0.0到1.0。
+只输出 JSON：{"scene": "...", "roi_usable": true或false, "occlusion": "无|UI覆盖|贴脸遮挡|天空|大面积特效", "time_weather": "白天|黄昏|夜战|雾天|未知", "has_enemy": true或false, "has_loot_signal": true或false, "has_prompt": true或false, "quality": "清晰|模糊|黑屏|过曝", "confidence": 0.0到1.0的小数}"""
 
 
 def load_cfg():
