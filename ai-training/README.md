@@ -2,18 +2,24 @@
 
 职责：把 C# 采集的可通行性数据训练成三分类小 CNN，导出 ONNX 放回主工程。与 docs/ai视觉感知设计.md 对应。
 
-## 环境搭建（Miniconda，环境名 img-train，Python 3.10）
+## 训练环境（本机已就绪：系统 Python 3.14 自带 torch 2.11+cu128，RTX 5070 验证可用）
 
+本机路线（已验证）：
 ```bash
-conda create -n img-train python=3.10 -y
-conda activate img-train
+# 系统 Python 3.14（C:\Users\Administrator\AppData\Local\Python\pythoncore-3.14-64）
+# 已装 torch 2.11.0+cu128 / torchvision / numpy / onnx / onnxruntime（GPU 实测可用）
+# 只差 pillow —— 用 --system-site-packages 的 venv 补齐，不污染系统 Python：
+"C:\Users\Administrator\AppData\Local\Python\pythoncore-3.14-64\python.exe" -m venv .venv-train --system-site-packages
+.venv-train\Scripts\python.exe -m pip install pillow -i https://pypi.tuna.tsinghua.edu.cn/simple
 
-# PyTorch（RTX 5070 = Blackwell，需 cu128 及以上；仅 CPU 环境去掉 --index-url 行）
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
-pip install onnx onnxruntime numpy pillow
+# 训练/导出/评估/冒烟一律用 .venv-train\Scripts\python.exe
+.venv-train\Scripts\python.exe src\smoke_test.py   # 链路自检
 ```
 
-国内网络：torch 走官方 cu128 源较稳；其余包若超时可用清华镜像 `-i https://pypi.tuna.tsinghua.edu.cn/simple`（注意该镜像 cp310 轮子齐全）。
+备选（从零重建 conda 环境）：`conda create -n img-train python=3.10` →
+`pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128` →
+`pip install onnx onnxruntime numpy pillow`。
+**铁律：torch 必须 ≥ cu128**——RTX 5070 是 Blackwell（sm_120），旧 cu 版本不识别该卡。
 
 ## 数据闭环（对应设计文档 §5）
 

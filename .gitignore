@@ -371,6 +371,7 @@ ai-training/datasets/passability/images/
 ai-training/datasets/record/full/
 ai-training/runs/
 ai-training/.venv-smoke/
+ai-training/.venv-train/
 
 
 # 其他 AI 工具工件

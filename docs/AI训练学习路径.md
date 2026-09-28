@@ -56,7 +56,7 @@
 
 ## 3. 边干边学：你的第一个任务（K0 采集夜 → v1 上线）
 
-1. **环境**：按 `ai-training/README.md` 建 conda 环境 `img-train`（torch cu128 + onnx）。
+1. **环境**：机器已就绪——系统 Python 3.14 自带 torch 2.11+cu128（GPU 实测可用），训练用 `ai-training/.venv-train`，详见 `ai-training/README.md`。自检：`python src/smoke_test.py`。
 2. **采集夜 ×3-5**：推荐 `dotnet run -- airecord --map 零号大坝 --season sX`（零按键自动存全帧，正常打游戏即可）→ 录完 `dotnet run -- ailabel` 图形界面逐张打标（1/2/0/b=标签，X=丢弃，N=下一个未标）。备选：`aicollect` 边玩边标（键位 1/2/0/b 同义，但控制台要抢焦点、会打断游戏）。按侦查报告 §3.2 覆盖矩阵打标（目标每类 1500+，no_ground 和 blocked 别偷懒）。同时 OBS 录整局。
 3. **清洗**：人工过一遍 manifest.csv，删错标、删糊图。
 4. **训练**：`python src/train.py --data datasets/passability --epochs 30`，看懂每行日志。
