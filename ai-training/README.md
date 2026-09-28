@@ -42,6 +42,8 @@
 ⑥ 重建金标集：新版本稳定后挑 ~100 张更新 assets/ai/golden/
 ⑦ 矛盾回流：python src/import_jsonl.py              （logs/ai 运行日志 → 人工复标队列）
 ⑧ 链路自检：python src/smoke_test.py                （伪造小数据集跑通 train→export→evaluate，不依赖真实素材）
+⑨ VLM 初筛（可选，需 vLLM 服务）：python src/prescreen.py → record/prescreen.csv
+   （自动分流+环境元数据+金帧池；操作手册与红线见 docs/AI初筛操作手册.md；VLM 判断不是训练标签）
 ```
 
 ## 目录约定
