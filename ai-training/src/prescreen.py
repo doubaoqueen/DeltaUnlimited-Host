@@ -114,17 +114,39 @@ def load_screened(path: Path) -> dict:
     return screened
 
 
+def print_report(out: Path):
+    """读取 prescreen.csv 全量打印漏斗统计（--report 模式与跑完收尾共用）。"""
+    all_rows = load_screened(out)
+    if not all_rows:
+        print("prescreen.csv 还是空的——先跑一轮初筛。")
+        return
+    usable = [r for r in all_rows.values() if r.get("roi_usable") == "True"]
+    gold = [r for r in all_rows.values()
+            if any(r.get(k) == "True" for k in ("has_enemy", "has_loot_signal", "has_prompt"))]
+    errs = [r for r in all_rows.values() if r.get("error")]
+    scenes: dict = {}
+    for r in all_rows.values():
+        scenes[r.get("scene", "?")] = scenes.get(r.get("scene", "?"), 0) + 1
+    print(f"初筛总 {len(all_rows)} → 可用 {len(usable)}（待人工标注）| 金帧 {len(gold)}（YOLO 素材池）| 失败 {len(errs)}")
+    print(f"场景分布: {scenes}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=0, help="最多处理 N 张（0=全部未筛帧）")
     ap.add_argument("--refresh", action="store_true", help="忽略已有结果，全部重筛")
+    ap.add_argument("--report", action="store_true", help="只打印当前漏斗统计，不筛新帧")
     ap.add_argument("--base-url", default="http://localhost:8000/v1")
     ap.add_argument("--model", default="qwen3vl-8b")
     args = ap.parse_args()
 
+    out = REC / "prescreen.csv"
+    if args.report:
+        print_report(out)
+        return
+
     cfg, (design_w, design_h) = load_cfg()
     rx, ry, rw, rh = cfg["roi"]
-    out = REC / "prescreen.csv"
     screened = load_screened(out)
 
     rows = []
@@ -182,16 +204,8 @@ def main():
             csv.DictWriter(f, fieldnames=FIELDS).writerow(row)
 
     # 收尾漏斗统计（覆盖 prescreen.csv 全量，含历史）
-    all_rows = load_screened(out)
-    usable = [r for r in all_rows.values() if r.get("roi_usable") == "True"]
-    gold = [r for r in all_rows.values()
-            if any(r.get(k) == "True" for k in ("has_enemy", "has_loot_signal", "has_prompt"))]
-    scenes: dict = {}
-    for r in all_rows.values():
-        scenes[r.get("scene", "?")] = scenes.get(r.get("scene", "?"), 0) + 1
     print(f"\n🏁 本轮：成功 {ok} / 失败 {fail}")
-    print(f"漏斗：初筛总 {len(all_rows)} → 可用 {len(usable)}（待人工标注）| 金帧 {len(gold)}（YOLO 素材池）")
-    print(f"场景分布: {scenes}")
+    print_report(out)
     print(f"产出: {out}（旁挂元数据，不影响训练 manifest）")
 
 
