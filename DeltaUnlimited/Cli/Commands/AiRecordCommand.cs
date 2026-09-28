@@ -21,7 +21,8 @@ public static class AiRecordCommand
         string season = GetOpt(cmdArgs, "--season") ?? "unknown";
         string winKeyword = GetOpt(cmdArgs, "--win") ?? runtime.WindowKeyword;
         double minDiff = ParseOpt(cmdArgs, "--diff", 2.0);
-        int intervalMs = ParseOpt(cmdArgs, "--interval", 250);
+        int intervalArg = ParseOpt(cmdArgs, "--interval", -1);
+        int? fixedInterval = intervalArg > 0 ? intervalArg : null;   // 未指定 = 每帧 1-2s 随机
         double maxGb = ParseOpt(cmdArgs, "--max-gb", 50.0);
 
         string recDir = Path.Combine(repoRoot, "ai-training", "datasets", "record");
@@ -37,7 +38,7 @@ public static class AiRecordCommand
         InputService.EnsureForeground(hwnd);
 
         Console.WriteLine($"AI 录制器：窗口 “{winKeyword}” | 地图 {map} | 赛季 {season}");
-        Console.WriteLine($"每 {intervalMs}ms 截一帧（帧差 <{minDiff} 跳过）| 容量上限 {maxGb}GB | Ctrl+C 或控制台 q 结束");
+        Console.WriteLine($"每 {(fixedInterval is { } fi ? $"{fi}ms" : "1-2s 随机")}截一帧（帧差 <{minDiff} 跳过）| 容量上限 {maxGb}GB | Ctrl+C 或控制台 q 结束");
         Console.WriteLine("全程零按键：正常打游戏即可，无需 alt-tab。输出: " + recDir);
 
         long saved = 0, skipped = 0;
@@ -83,8 +84,10 @@ public static class AiRecordCommand
                     skipped++;
                 }
 
-                // 分片睡眠：Ctrl+C 急停 / q 退出最快 50ms 内响应
-                for (int waited = 0; waited < intervalMs && !quit && !CommandUtil.StopRequested; waited += 50)
+                // 分片睡眠：本次等待时长 = 固定值或 1-2s 随机（随机化避免与游戏动画/UI 闪烁周期重合）
+                // Ctrl+C 急停 / q 退出最快 50ms 内响应
+                int wait = fixedInterval ?? Random.Shared.Next(1000, 2001);
+                for (int waited = 0; waited < wait && !quit && !CommandUtil.StopRequested; waited += 50)
                 {
                     quit |= Console.KeyAvailable && Console.ReadKey(true).Key == ConsoleKey.Q;
                     if (!quit) Thread.Sleep(50);
