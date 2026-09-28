@@ -52,8 +52,10 @@
 |---|---|
 | **初筛漏斗统计** | `python src/prescreen.py --report`（ai-training/ 下，随时可反复执行）——可用数/金帧数/场景分布 |
 | 初筛逐帧明细 | Excel 或 VS Code 打开 `datasets/record/prescreen.csv`（一行一帧；Excel 里"数据→筛选"可按场景/可用性切片） |
+| **人工 vs VLM 对账** | `python src/audit.py`——分流一致率/混淆矩阵/标签分布（每轮标注完跑一次） |
 | 标注进度 | `datasets/passability/manifest.csv` 的行数 - 1（表头）= 已人工标注帧数 |
 | 训练效果 | `train.py` 每 epoch 打印 val macro-F1 与各类 F1；checkpoint 里带混淆矩阵；`dotnet run -- aieval` 跑金标集门禁 |
+| **vLLM 服务启停** | 启动命令/停止（`pkill -f vllm`）/验证 → `docs/AI初筛操作手册.md §1`；⚠️ 训练前必须先停服务 |
 | 服务状态 | 浏览器开 `http://localhost:8000/v1/models` 有响应 = vLLM 在岗；`nvidia-smi` 看显存（服务约 9.6GB） |
 | 详细说明 | 初筛字段含义/注意事项/故障排查见 `docs/AI初筛操作手册.md`；训练方案见 `docs/AI训练侦查报告.md` |
 
