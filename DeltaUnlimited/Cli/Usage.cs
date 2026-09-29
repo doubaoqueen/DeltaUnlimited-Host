@@ -18,7 +18,7 @@ public static class Usage
               patrol [秒数] [阈值] [连续] [90°px] [窗口]   反应式巡逻 v2：贴墙停+横移低效双守卫，自动转向
               aicollect [--map 地图] [--season 赛季]  可通行性数据采集（边玩边标: 1/2/0/b）
               airecord [--map 地图] [--season 赛季] [--interval 毫秒] [--max-gb 上限]   素材录制器（默认1-2s随机一帧，零按键，事后 ailabel 标注）
-              ailabel                            素材标注器（图形界面：左手 A/S/D/F 打标，右手 ←/→ 翻页，N 跳下一未标；兼容 1/2/0/B）
+              ailabel [--start unlabeled|first|行号]  素材标注器（默认跳第一个未标帧；A/S/D/F 打标，←/→ 翻页，N 跳下一未标；兼容 1/2/0/B）
               roitune [截图路径]                  ROI 调参器（实时对游戏画面/静态图移动绿框，回车保存 ai_vision.json）
               aiprobe [图片路径...]               AI 探针：实时（对游戏画面）/静态（对截图）显示可通行性判定
               aieval [模型] [数据集目录]         三分类评估（混淆矩阵/macro-F1，金标集门禁离线版）

@@ -17,7 +17,7 @@ public sealed class AiLabelForm : Form
     private readonly Label _lblKeys = new();
     private int _index;
 
-    internal AiLabelForm(AiLabelStore store)
+    internal AiLabelForm(AiLabelStore store, int startIndex)
     {
         _store = store;
 
@@ -46,11 +46,10 @@ public sealed class AiLabelForm : Form
         NewLabel(984, 420, 480, 96, out _lblStats);
         NewLabel(12, 566, 1452, 60, out _lblKeys);
         _lblKeys.Text = "左手打标：A=可通行(passable)  S=不可通行(blocked)  D=无地面(no_ground)  F=背景(background)  X=丢弃(discard)   右手翻页：←/→  N=下一个未标  M=清理缺失帧  Esc=退出\n" +
-                        "数字键 1/2/0/B 仍兼容（与 aicollect 同键位）。每次打标即时写盘，无需保存；回翻旧图按键即可复标。";
+                        "数字键 1/2/0/B 仍兼容（与 aicollect 同键位）。每次打标即时写盘，无需保存；回翻旧图按键即可复标。启动默认跳到第一个未标帧（命令行 --start first/行号 可改）。";
 
-        // 启动定位到第一个文件完好的帧——清单里可能混有已被手动清理的帧，别让空白画面当门面
-        int first = _store.FirstViewable();
-        MoveTo(first >= 0 ? first : 0);
+        // 启动行号由命令行解析（缺省=第一个未标帧；全标完=第一个文件完好的帧进入复览）
+        MoveTo(Math.Clamp(startIndex, 0, Math.Max(0, _store.RowCount - 1)));
     }
 
     private void NewLabel(int x, int y, int w, int h, out Label lbl)

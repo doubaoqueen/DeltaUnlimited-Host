@@ -19,17 +19,19 @@ public static class AiLabelCommand
         var runtime = data.LoadRuntime();
         var cfg = data.LoadAiVision();
         using var store = AiLabelStore.Load(repoRoot, cfg, runtime.DesignWidth, runtime.DesignHeight);
+        int start = ResolveStart(store, cmdArgs);
         Console.WriteLine($"AI 标注器：共 {store.RowCount} 帧，未标 {store.UnlabeledCount}（{store.RecordDir}）");
+        Console.WriteLine($"  启动位置：第 {start + 1} 帧（--start unlabeled=第一个未标（缺省）/ first=从头复览 / 行号=指定行，按窗口 [N/M] 的 1 基行号）");
         if (store.MissingCount > 0)
             Console.WriteLine($"⚠ {store.MissingCount} 帧清单有记录但全帧文件已不在（可能被手动清理）——窗口内按 M 一键丢弃，或 X 逐张丢弃");
-        Console.WriteLine("窗口内按键：1=可通行 2=不可通行 0=无地面 B=背景 X=丢弃 M=清理缺失帧 ←→=翻张 N=下一个未标 Esc=退出");
+        Console.WriteLine("窗口内按键：A/S/D/F=可通行/不可通行/无地面/背景 X=丢弃 M=清理缺失帧 ←→=翻张 N=下一个未标 Esc=退出（1/2/0/B 兼容）");
 
         // 控制台入口线程是 MTA，WinForms 必须在专用 STA 线程上跑消息循环（同 GuiApp 模式）
         var ui = new Thread(() =>
         {
             try { Application.SetHighDpiMode(HighDpiMode.PerMonitorV2); }
             catch { /* 已被其它组件设置则忽略 */ }
-            Application.Run(new AiLabelForm(store));
+            Application.Run(new AiLabelForm(store, start));
         });
         ui.SetApartmentState(ApartmentState.STA);
         ui.Start();
@@ -38,6 +40,27 @@ public static class AiLabelCommand
         Console.WriteLine($"🏁 标注会话结束：未标剩余 {store.UnlabeledCount} / 共 {store.RowCount}");
         Console.WriteLine("   训练清单分布: " + string.Join(" ", store.TrainCounts.Select(kv => $"{kv.Key}:{kv.Value}")));
         Console.WriteLine("   下一步: python src/train.py --data datasets/passability --epochs 30（ai-training/ 下）");
+    }
+
+    /// <summary>解析 --start 起点：unlabeled（缺省，第一个未标；全标完则落回复览）/
+    /// first（第一个文件完好的帧，从头过一遍）/ 数字（1 基行号，同窗口 [N/M] 显示）。</summary>
+    internal static int ResolveStart(AiLabelStore store, string[] cmdArgs)
+    {
+        string mode = "unlabeled";
+        for (int i = 0; i < cmdArgs.Length - 1; i++)
+            if (cmdArgs[i] == "--start") mode = cmdArgs[i + 1].ToLowerInvariant();
+        switch (mode)
+        {
+            case "unlabeled":
+                int unl = store.FirstUnlabeled();
+                return unl >= 0 ? unl : Math.Max(0, store.FirstViewable());
+            case "first":
+                return Math.Max(0, store.FirstViewable());
+            default:
+                if (int.TryParse(mode, out int n))
+                    return Math.Clamp(n - 1, 0, Math.Max(0, store.RowCount - 1));
+                throw new ArgumentException($"未知 --start 值: {mode}（可用 unlabeled / first / 行号数字）");
+        }
     }
 }
 
@@ -133,6 +156,19 @@ internal sealed class AiLabelStore : IDisposable
     {
         for (int i = 0; i < _rows.Count; i++)
             if (FileExists(i)) return i;
+        return -1;
+    }
+
+    /// <summary>第一个未标注且文件完好的行号（续标起点）；没有则第一个未标注行（哪怕文件缺失）；
+    /// 全部标完返回 -1（调用方落到复览模式）。</summary>
+    public int FirstUnlabeled()
+    {
+        for (int pass = 0; pass < 2; pass++)
+            for (int i = 0; i < _rows.Count; i++)
+            {
+                if (_rows[i].Label.Length != 0) continue;
+                if (pass == 0 ? FileExists(i) : !FileExists(i)) return i;
+            }
         return -1;
     }
 
