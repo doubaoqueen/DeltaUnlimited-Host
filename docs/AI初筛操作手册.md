@@ -60,13 +60,87 @@ wsl -e bash -c 'export HF_HUB_CACHE=/mnt/d/hf-cache HF_ENDPOINT=https://hf-mirro
 2. **服务空闲也占 9.6GB 显存**：不用就停，训练前必须停（一张 5070 装不下服务+训练）。
 3. 模型权重在 `D:\hf-cache`（Windows 侧普通文件夹，WSL 里看到的是 `/mnt/d/hf-cache`）；vLLM 环境（7.6GB）在 WSL 虚拟磁盘（C 盘侧）。
 
-## 2. 基本用法（ai-training/ 目录下）
+## 2. 一轮完整操作（新手照抄版）
+
+> 前提：素材已用 `dotnet run -- airecord --map 零号大坝 --season s5` 录好（用法见 `DeltaUnlimited/Cli/README.md`）——本手册从"手里有素材"开始。
+
+**你全程只需要两个窗口，分工固定：**
+
+| 窗口 | 是什么 | 干什么 | 什么时候碰它 |
+|---|---|---|---|
+| ① 服务窗口 | Ubuntu（WSL）黑窗口 | 只负责服务的开/关，开了就不用动 | 开局贴 §1.2 三条命令，收工 Ctrl+C |
+| ② 工作窗口 | 你平时跑命令的普通终端（PowerShell/Git Bash 都行） | 跑初筛、看战报、跑标注 | 其余一切操作 |
+
+**第 1 步 · 启动服务**（窗口①）——按 §1.2 贴三条命令 → 等 3-5 分钟 → 日志出现 `GET /v1/models 200` 即就绪。
+
+**第 2 步 · 试跑 5 帧**（窗口②）——验证整条链路通不通：
 
 ```bash
-.venv-train/Scripts/python.exe src/prescreen.py --limit 5    # 试跑 5 张（第一次先跑这个）
-.venv-train/Scripts/python.exe src/prescreen.py              # 处理全部未筛帧
-.venv-train/Scripts/python.exe src/prescreen.py --refresh    # 忽略已有结果全部重筛
+cd D:/MeineArbeit/DeltaUnlimited/ai-training
+.venv-train/Scripts/python.exe src/prescreen.py --limit 5
 ```
+
+看到 5 行"✅可用 / ⛔淘汰"的判定输出 = 通了；报"接口连不上"→ 回窗口①看日志（多半还在启动中或没起）。
+
+**第 3 步 · 全量开筛**（窗口②）：
+
+```bash
+.venv-train/Scripts/python.exe src/prescreen.py
+```
+
+每帧 1-3 秒，千帧量级约 20-50 分钟。**中途随时 Ctrl+C**——每帧即时落盘，重跑自动从断点续（已筛的跳过，失败帧自动重试）。⚠️ **别边开着游戏边筛**：服务占 9.6GB 显存，游戏再吃几个 G，12GB 的卡顶不住；打完一局歇着时再筛。
+
+**第 4 步 · 看战报**（窗口②）：
+
+```bash
+.venv-train/Scripts/python.exe src/prescreen.py --report
+```
+
+打印漏斗：初筛总数 → 可用（待人工标注）→ 金帧（YOLO 素材池）→ 失败数。
+
+**第 5 步 · 停服务**（回窗口①）按 **Ctrl+C**。初筛完它就没用了——空闲也占 9.6GB 显存，别让它白占。
+
+**第 6 步 · 人工标注**（窗口②，**不需要服务**）：
+
+```bash
+cd D:/MeineArbeit/DeltaUnlimited/DeltaUnlimited
+dotnet run -- ailabel
+```
+
+自动跳到第一个未标帧；A/S/D/F 打标、←/→ 翻页、X 丢弃（键位细节见 `DeltaUnlimited/Cli/README.md`）。**blocked（怼墙/贴箱子/栅栏）优先标**——那是模型最缺的样本。打标/VLM 预判怎么配合看 §4。
+
+**第 7 步 · 对账**（窗口②，可选但推荐，每轮标注完跑一次）：
+
+```bash
+cd D:/MeineArbeit/DeltaUnlimited/ai-training
+.venv-train/Scripts/python.exe src/audit.py
+```
+
+打印"人工 vs VLM"一致率和混淆矩阵——这是检验初筛员值不值得信的成绩单。
+
+### 命令速抄卡
+
+窗口①（Ubuntu/WSL，服务专用，只记开和关）：
+
+```text
+开：贴 §1.2 的三条命令（或懒人一行版）→ 等 GET /v1/models 200
+关：窗口里 Ctrl+C；或任意终端执行  wsl -e bash -c "pkill -f vllm"
+```
+
+窗口②（普通终端，从试跑到收工）：
+
+```bash
+cd D:/MeineArbeit/DeltaUnlimited/ai-training
+.venv-train/Scripts/python.exe src/prescreen.py --limit 5    # ② 试跑
+.venv-train/Scripts/python.exe src/prescreen.py              # ③ 全量
+.venv-train/Scripts/python.exe src/prescreen.py --report     # ④ 战报
+cd D:/MeineArbeit/DeltaUnlimited/DeltaUnlimited
+dotnet run -- ailabel                                        # ⑥ 标注
+cd D:/MeineArbeit/DeltaUnlimited/ai-training
+.venv-train/Scripts/python.exe src/audit.py                  # ⑦ 对账
+```
+
+### prescreen.py 参数
 
 | 参数 | 默认 | 说明 |
 |---|---|---|
@@ -74,8 +148,6 @@ wsl -e bash -c 'export HF_HUB_CACHE=/mnt/d/hf-cache HF_ENDPOINT=https://hf-mirro
 | `--refresh` | 关 | 已筛过的也重筛（prompt 改版或换模型后用） |
 | `--base-url` | `http://localhost:8000/v1` | vLLM 服务地址 |
 | `--model` | `qwen3vl-8b` | API 里的模型名（服务端 `--served-model-name` 定的） |
-
-速率预期：每帧 1-3 秒，732 帧全量约 15-35 分钟。**中途可随时 Ctrl+C**——每帧即时落盘，重跑自动从断点续（已筛的自动跳过）。
 
 ## 3. 产物：prescreen.csv（旁挂文件）
 
