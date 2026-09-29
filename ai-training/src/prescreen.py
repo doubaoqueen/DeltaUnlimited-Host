@@ -6,7 +6,8 @@
 用法（ai-training/ 下，需先启动 vLLM 服务，见 docs/AI初筛操作手册.md）:
   python src/prescreen.py --limit 5     # 试跑 5 张未筛帧
   python src/prescreen.py               # 处理全部未筛帧
-  python src/prescreen.py --refresh     # 忽略已有结果重筛
+  python src/prescreen.py --refresh     # 忽略已有结果重筛（prompt 改版/换模型后用）
+默认增量：已成功判定的帧跳过；判定失败（error 非空）的帧下次运行自动重试，无需手动补筛。
 """
 
 import argparse
@@ -114,6 +115,12 @@ def load_screened(path: Path) -> dict:
     return screened
 
 
+def _judged(row: dict | None) -> bool:
+    """该帧是否已有成功判定。error 非空的失败行不算数——下次运行自动重试；
+    重试成功后新行在 CSV 里排在旧行之后，读入按 relpath 后行覆盖前行，报告不会重复计数。"""
+    return row is not None and not row.get("error")
+
+
 def print_report(out: Path):
     """读取 prescreen.csv 全量打印漏斗统计（--report 模式与跑完收尾共用）。"""
     all_rows = load_screened(out)
@@ -154,13 +161,15 @@ def main():
         rows = list(csv.DictReader(f))
     todo = [r for r in rows
             if (REC / r["relpath"]).exists()
-            and (args.refresh or r["relpath"] not in screened)]
+            and (args.refresh or not _judged(screened.get(r["relpath"])))]
     if args.limit > 0:
         todo = todo[:args.limit]
     if not todo:
-        print(f"没有待筛帧（清单 {len(rows)} 行，已筛 {len(screened)}）。--refresh 可重筛。")
+        done = sum(1 for v in screened.values() if _judged(v))
+        print(f"没有待筛帧（清单 {len(rows)} 行，成功判定 {done} 帧）。--refresh 可重筛。")
         return
-    print(f"质检员开始工作：待筛 {len(todo)} 帧（已筛 {len(screened)}）| 服务 {args.base_url} | 模型 {args.model}")
+    done = sum(1 for v in screened.values() if _judged(v))
+    print(f"质检员开始工作：待筛 {len(todo)} 帧（历史成功判定 {done}）| 服务 {args.base_url} | 模型 {args.model}")
 
     if args.refresh:
         keep = [r for r in screened.values() if r["relpath"] not in {t["relpath"] for t in todo}]
