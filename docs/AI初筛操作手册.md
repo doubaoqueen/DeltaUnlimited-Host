@@ -13,21 +13,52 @@
 
 ## 1. 服务管理（前提）
 
-| 操作 | 命令 |
-|---|---|
-| 启动（WSL 内常驻） | 见下方完整命令 |
-| 停止 | `wsl -e bash -c "pkill -f vllm"` |
-| 验证存活 | 浏览器开 `http://localhost:8000/v1/models`，或 `nvidia-smi` 看显存是否 ≈9.6GB |
+### 1.1 这个服务是什么、为什么在 WSL 里
 
-启动命令（最终配方，直接复用；在任意终端执行）：
+- "服务" = 一个**常驻后台程序**：把 Qwen3-VL-8B 模型装进你的 5070 显存，监听 `localhost:8000`。prescreen.py 把截图发给它、它回判断 JSON。它不启动，prescreen.py 就连不上接口。
+- 它跑在 **WSL** 里（Windows 自带的 Linux 子系统）——因为 vLLM（推理服务框架）是 Linux 优先的生态，而 WSL 能直接共用你的 NVIDIA 驱动和 GPU。你的使用习惯不变：prescreen.py 照旧在 Windows 里跑，两边通过 localhost 自动打通。
+
+### 1.2 启动（新手照抄版）
+
+1. **打开一个 WSL 终端**：按 Win 键输入 **Ubuntu** 回车（打开的就是 WSL 终端）；或者在任意终端里输入 `wsl` 回车。提示符变成 `用户名@主机:~$` 的样子，就说明你"进到 Linux 里"了。
+2. **粘贴下面三条命令**（整段一起复制粘贴回车也行）：
+
+```bash
+export HF_HUB_CACHE=/mnt/d/hf-cache HF_ENDPOINT=https://hf-mirror.com CC=gcc VLLM_USE_FLASHINFER_SAMPLER=0 VLLM_FLASHINFER_FORCE_TENSOR_REGISTRY=1
+source ~/vllm-env/bin/activate
+vllm serve /mnt/d/hf-cache/models--cyankiwi--Qwen3-VL-8B-Instruct-AWQ-4bit/snapshots/87196f7771efdd7022a8d8f094ac6e063bf87f5c --served-model-name qwen3vl-8b --max-model-len 2048 --gpu-memory-utilization 0.88 --enforce-eager --limit-mm-per-prompt '{"images": 1}' --port 8000
+```
+
+3. **这个窗口别关！** 服务就活在这个窗口里，日志实时滚动——**看进度/判断启动到哪了就是看这个窗口**。可以最小化，但用初筛期间它必须开着（关窗口 = 服务停止）。第一次 export 的几个环境变量只在当前窗口生效，所以每次重启都要完整贴三条。
+4. 启动需 **3-5 分钟**（从 D 盘加载权重 + 编译内核）。**就绪标志**：日志末尾出现 Uvicorn 路由表和 `GET /v1/models 200` 字样。
+
+懒人版（不想手动进 WSL：在任意 Windows 终端整行执行，效果完全等同，窗口同样保持打开）：
 
 ```bash
 wsl -e bash -c 'export HF_HUB_CACHE=/mnt/d/hf-cache HF_ENDPOINT=https://hf-mirror.com CC=gcc VLLM_USE_FLASHINFER_SAMPLER=0 VLLM_FLASHINFER_FORCE_TENSOR_REGISTRY=1; source ~/vllm-env/bin/activate; exec vllm serve /mnt/d/hf-cache/models--cyankiwi--Qwen3-VL-8B-Instruct-AWQ-4bit/snapshots/87196f7771efdd7022a8d8f094ac6e063bf87f5c --served-model-name qwen3vl-8b --max-model-len 2048 --gpu-memory-utilization 0.88 --enforce-eager --limit-mm-per-prompt "{\"images\": 1}" --port 8000'
 ```
 
-- 就绪标志：日志末尾出现 Uvicorn 路由表 + `GET /v1/models 200`；启动全程约 3-5 分钟（从 D 盘加载权重 + 编译内核，首次编译最慢）。
-- 模型权重在 `D:\hf-cache`（普通文件夹）；vLLM 环境（7.6GB）在 WSL 虚拟磁盘（C 盘）里。
-- **显存互斥**：服务运行期间不能训练（一张 5070 装不下两个）；反之训练前 `pkill -f vllm`。
+### 1.3 验证存活
+
+| 方法 | 判读 |
+|---|---|
+| 浏览器开 `http://localhost:8000/v1/models` | 返回一段 JSON = 在岗；打不开 = 没起或没起完 |
+| `nvidia-smi`（WSL/PowerShell 都能跑） | 显存被吃 ≈9.6GB = 模型已装上 |
+| 任务管理器 GPU 标签页 | 专用 GPU 内存涨 ~9.6GB |
+
+### 1.4 停止
+
+| 情形 | 操作 |
+|---|---|
+| 正常收工 | 回到那个服务窗口，按 **Ctrl+C**（优雅退出，日志会收尾） |
+| 窗口找不到了/服务假死 | 任意终端执行 `wsl -e bash -c "pkill -f vllm"` |
+| 兜底（WSL 里没跑别的东西时） | `wsl --shutdown`（整个 WSL 断电，所有 WSL 内进程全停） |
+
+### 1.5 三条铁律
+
+1. **窗口开着 = 服务在；窗口关了 = 服务停**。没有隐藏的后台守护。
+2. **服务空闲也占 9.6GB 显存**：不用就停，训练前必须停（一张 5070 装不下服务+训练）。
+3. 模型权重在 `D:\hf-cache`（Windows 侧普通文件夹，WSL 里看到的是 `/mnt/d/hf-cache`）；vLLM 环境（7.6GB）在 WSL 虚拟磁盘（C 盘侧）。
 
 ## 2. 基本用法（ai-training/ 目录下）
 
@@ -103,5 +134,5 @@ wsl -e bash -c 'export HF_HUB_CACHE=/mnt/d/hf-cache HF_ENDPOINT=https://hf-mirro
 | 初筛脚本 | `ai-training/src/prescreen.py` |
 | 初筛结果 | `ai-training/datasets/record/prescreen.csv` |
 | 模型权重 | `D:\hf-cache`（普通文件夹） |
-| vLLM 服务日志 | 工具会话 stdout（启动时的后台任务） |
+| vLLM 服务日志 | 启动服务的那个 WSL 窗口，日志实时滚动（§1.2 第 3 步） |
 | 部署踩坑全记录 | `blog/02-AI质检员-Qwen3VL部署八连坑.md`（未入库） |

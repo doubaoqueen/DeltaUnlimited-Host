@@ -55,9 +55,14 @@
 | **人工 vs VLM 对账** | `python src/audit.py`——分流一致率/混淆矩阵/标签分布（每轮标注完跑一次） |
 | 标注进度 | `datasets/passability/manifest.csv` 的行数 - 1（表头）= 已人工标注帧数 |
 | 训练效果 | `train.py` 每 epoch 打印 val macro-F1 与各类 F1；checkpoint 里带混淆矩阵；`dotnet run -- aieval` 跑金标集门禁 |
-| **vLLM 服务启停** | 启动命令/停止（`pkill -f vllm`）/验证 → `docs/AI初筛操作手册.md §1`；⚠️ 训练前必须先停服务 |
+| **vLLM 服务启停** | 启动：下面代码块整行执行（3-5 分钟就绪，服务窗口保持打开）；停止：服务窗口 `Ctrl+C` 或 `wsl -e bash -c "pkill -f vllm"`；验证：浏览器开 `http://localhost:8000/v1/models`；⚠️ 训练前必须先停服务 |
 | 服务状态 | 浏览器开 `http://localhost:8000/v1/models` 有响应 = vLLM 在岗；`nvidia-smi` 看显存（服务约 9.6GB） |
 | 详细说明 | 初筛字段含义/注意事项/故障排查见 `docs/AI初筛操作手册.md`；训练方案见 `docs/AI训练侦查报告.md` |
+
+```bash
+# vLLM 服务启动（懒人一行版，任意 Windows 终端可执行；WSL 新手分步版见 docs/AI初筛操作手册.md §1）
+wsl -e bash -c 'export HF_HUB_CACHE=/mnt/d/hf-cache HF_ENDPOINT=https://hf-mirror.com CC=gcc VLLM_USE_FLASHINFER_SAMPLER=0 VLLM_FLASHINFER_FORCE_TENSOR_REGISTRY=1; source ~/vllm-env/bin/activate; exec vllm serve /mnt/d/hf-cache/models--cyankiwi--Qwen3-VL-8B-Instruct-AWQ-4bit/snapshots/87196f7771efdd7022a8d8f094ac6e063bf87f5c --served-model-name qwen3vl-8b --max-model-len 2048 --gpu-memory-utilization 0.88 --enforce-eager --limit-mm-per-prompt "{\"images\": 1}" --port 8000'
+```
 
 ## 目录约定
 
