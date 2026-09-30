@@ -41,7 +41,7 @@
 | `ailabel [--start unlabeled\|first\|行号]` | **图形化标注器** | 左手 A/S/D/F 打标 + 右手 ←/→ 翻页（兼容 1/2/0/B），X 丢弃、N 跳下一未标、M 清缺失帧、G 弹窗跳任意张（行号/文件名片段）、PgUp/PgDn ±100；启动默认跳第一个未标帧（续标不用找位置），`--start first` 从头复览、`--start 430` 落到指定行；裁 ROI 写回训练 manifest，支持回翻复标，即时落盘 |
 | `roitune [截图路径]` | **ROI 调参器** | 实时移动绿框标定模型视野，2:1 锁自动联动 input_size，回车保存 `ai_vision.json` |
 | `aicollect [--map] [--season]` | 边玩边标（备用） | 控制台抢焦点式直播标注，键位 1/2/0/b 与 ailabel 同义 |
-| `aieval [模型] [数据集目录]` | 金标集门禁评估 | 混淆矩阵 + macro-F1（≥0.85 才过门禁） |
+| `aieval [模型] [数据集目录]` | 金标集门禁评估 | 混淆矩阵 + macro-F1 三档判定（≥0.85 可执行 / 0.60-0.85 强制仅观察 / <0.60 禁用） |
 
 配套的 Python 侧（在 `ai-training/`，见其 README）：`prescreen.py`（VLM 初筛，需 vLLM 服务）、`audit.py`（人工 vs VLM 对账）、`train.py` / `export_onnx.py`（训练与导出）、`smoke_test.py`（链路自检）。
 

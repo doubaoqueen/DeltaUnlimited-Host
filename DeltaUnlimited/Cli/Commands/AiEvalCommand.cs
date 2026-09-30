@@ -29,7 +29,9 @@ public static class AiEvalCommand
         var report = AiEvaluator.Evaluate(sensor, datasetDir, runtime.DesignWidth, runtime.DesignHeight);
         Console.WriteLine(AiEvaluator.FormatReport(report));
 
-        string verdict = report.MacroF1 >= cfg.Drift.MinMacroF1 ? "✅ PASS" : "❌ FAIL";
-        Console.WriteLine($"门禁判定: {verdict}（macro-F1 {report.MacroF1:F3} vs 阈值 {cfg.Drift.MinMacroF1}）");
+        string verdict = report.MacroF1 >= cfg.Drift.MinMacroF1 ? "✅ PASS（可执行）"
+            : report.MacroF1 >= cfg.Drift.MinMacroF1Observe ? "⚠️ OBSERVE-ONLY（降级仅观察）"
+            : "❌ FAIL（禁用）";
+        Console.WriteLine($"门禁判定: {verdict}（macro-F1 {report.MacroF1:F3} | 观察线 {cfg.Drift.MinMacroF1Observe} | 执行线 {cfg.Drift.MinMacroF1}）");
     }
 }

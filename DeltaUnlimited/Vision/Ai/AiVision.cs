@@ -29,7 +29,10 @@ public static class AiVision
     public static bool Available { get; private set; }
 
     /// <summary>预警是否作用于动作（false = 只记录不动动作，observe-only）。</summary>
-    public static bool Enforce => Available && _cfg.Avoid.Enforce;
+    private static bool _observeOnly;   // 门禁降级标记：本会话强制仅观察
+
+    /// <summary>enforce 总开关：可用 && 配置允许 && 门禁未降级。</summary>
+    public static bool Enforce => Available && _cfg.Avoid.Enforce && !_observeOnly;
 
     public static string StatusText { get; private set; } = "AI 感知：未初始化";
 
@@ -86,13 +89,22 @@ public static class AiVision
         {
             var report = AiEvaluator.Evaluate(sensor, goldenDir, runtime.DesignWidth, runtime.DesignHeight);
             Logger.Info($"金标集回放：{AiEvaluator.FormatReport(report)}");
-            if (report.Total >= 10 && report.MacroF1 < cfg.Drift.MinMacroF1)
+            if (report.Total >= 10)
             {
-                runner.Dispose();
-                StatusText = $"AI 感知：金标集 macro-F1 {report.MacroF1:F3} < {cfg.Drift.MinMacroF1}（疑似赛季漂移），自动禁用。请用新素材重训";
-                Logger.Warn(StatusText);
-                Console.WriteLine($"  ⛔ {StatusText}");
-                return;
+                if (report.MacroF1 < cfg.Drift.MinMacroF1Observe)
+                {
+                    runner.Dispose();
+                    StatusText = $"AI 感知：金标集 macro-F1 {report.MacroF1:F3} < 观察线 {cfg.Drift.MinMacroF1Observe}（疑似赛季漂移），自动禁用。请用新素材重训";
+                    Logger.Warn(StatusText);
+                    Console.WriteLine($"  ⛔ {StatusText}");
+                    return;
+                }
+                if (report.MacroF1 < cfg.Drift.MinMacroF1)
+                {
+                    _observeOnly = true;
+                    Console.WriteLine($"  ⚠️ 金标集 macro-F1 {report.MacroF1:F3} 达观察线但未达执行线 {cfg.Drift.MinMacroF1}：本会话强制仅观察（enforce 失效）");
+                    Logger.Warn("金标门禁降级：仅观察模式");
+                }
             }
         }
         else
@@ -102,6 +114,8 @@ public static class AiVision
 
         _runner = runner;
         _sensor = sensor;
+        if (_observeOnly)
+            StatusText += " | ⚠️ 仅观察（门禁降级）";
         _filter = new PassabilityFilter(cfg.Filter.Window, cfg.Filter.K, cfg.Filter.MotionDiffThreshold, cfg.MinConfidence);
         _drift = new DriftMonitor(cfg.Drift.ContradictionRateLimit, TimeSpan.FromMinutes(cfg.Drift.WindowMinutes), cfg.Drift.MinSamples);
         _sink = new AiLogSink(repoRoot, cfg.Log, cfg.Model, runner.Provider);

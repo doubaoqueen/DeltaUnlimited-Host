@@ -89,9 +89,13 @@ public sealed class AiDriftConfig
     [JsonPropertyName("golden_set_dir")]
     public string GoldenSetDir { get; set; } = "assets/ai/golden";
 
-    /// <summary>金标集 macro-F1 低于此值 → 启动期自动禁用（金标集为空则跳过门禁并告警）。</summary>
+    /// <summary>执行线：金标集 macro-F1 ≥ 此值才允许 enforce 模式。</summary>
     [JsonPropertyName("min_macro_f1")]
     public double MinMacroF1 { get; set; } = 0.85;
+
+    /// <summary>观察线：macro-F1 达不到执行线但 ≥ 此值 → 降级为仅观察会话（低于此值才禁用）。</summary>
+    [JsonPropertyName("min_macro_f1_observe")]
+    public double MinMacroF1Observe { get; set; } = 0.60;
 
     /// <summary>滑窗内矛盾率（预测 vs 守卫事实）超过此值 → 自动禁用。</summary>
     [JsonPropertyName("contradiction_rate_limit")]

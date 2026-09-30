@@ -31,7 +31,8 @@
     "min_macro_f1": 0.85,
     "contradiction_rate_limit": 0.25,
     "window_minutes": 10,
-    "min_samples": 20
+    "min_samples": 20,
+    "min_macro_f1_observe": 0.6
   },
   "log": {
     "background_every": 50,
