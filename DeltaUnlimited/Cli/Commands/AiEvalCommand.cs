@@ -26,7 +26,7 @@ public static class AiEvalCommand
         Console.WriteLine($"  执行提供者: {runner.Provider} | 输出类别数 {runner.OutputCount}");
 
         var sensor = new PassabilitySensor(runner, cfg, runtime.DesignWidth, runtime.DesignHeight);
-        var report = AiEvaluator.Evaluate(sensor, datasetDir);
+        var report = AiEvaluator.Evaluate(sensor, datasetDir, runtime.DesignWidth, runtime.DesignHeight);
         Console.WriteLine(AiEvaluator.FormatReport(report));
 
         string verdict = report.MacroF1 >= cfg.Drift.MinMacroF1 ? "✅ PASS" : "❌ FAIL";

@@ -37,6 +37,8 @@ def main():
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--num-workers", type=int, default=4)
     ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--weight-decay", type=float, default=0.0, help="AdamW 权重衰减（抗过拟合）")
+    ap.add_argument("--weight-cap", type=float, default=0.0, help="类别逆频权重上限，0=不设限；小类样本极少时防损失被其垄断")
     ap.add_argument("--scratch", action="store_true", help="不从 ImageNet 预训练起步（对照实验用）")
     args = ap.parse_args()
 
@@ -58,9 +60,12 @@ def main():
     val_loader = DataLoader(val_ds, batch_size=args.batch_size, num_workers=2)
 
     model = build(args.model, pretrained=not args.scratch).to(device)
-    opt = torch.optim.AdamW(model.parameters(), lr=args.lr)
+    opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.epochs)
-    loss_fn = nn.CrossEntropyLoss(weight=compute_class_weights(train_rows).to(device))
+    class_w = compute_class_weights(train_rows)
+    if args.weight_cap > 0:
+        class_w = class_w.clamp(max=args.weight_cap)
+    loss_fn = nn.CrossEntropyLoss(weight=class_w.to(device))
     n_cls = len(CLASSES)
 
     out_dir = Path("runs")

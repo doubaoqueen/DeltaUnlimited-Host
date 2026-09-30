@@ -84,7 +84,7 @@ public static class AiVision
         var goldenDir = Path.Combine(repoRoot, cfg.Drift.GoldenSetDir);
         if (File.Exists(Path.Combine(goldenDir, "labels.csv")))
         {
-            var report = AiEvaluator.Evaluate(sensor, goldenDir);
+            var report = AiEvaluator.Evaluate(sensor, goldenDir, runtime.DesignWidth, runtime.DesignHeight);
             Logger.Info($"金标集回放：{AiEvaluator.FormatReport(report)}");
             if (report.Total >= 10 && report.MacroF1 < cfg.Drift.MinMacroF1)
             {

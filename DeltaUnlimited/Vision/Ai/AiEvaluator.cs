@@ -15,8 +15,10 @@ public static class AiEvaluator
         double MeanMs,
         double P99Ms);
 
-    /// <summary>目录须含 labels.csv，每行：文件名,label[,地图,赛季,来源,created]；label ∈ passable/blocked/no_ground。</summary>
-    public static EvalReport Evaluate(PassabilitySensor sensor, string datasetDir)
+    /// <summary>目录须含 labels.csv，每行：文件名,label[,地图,赛季,来源,created]；label ∈ passable/blocked/no_ground。
+    /// 图片按尺寸自动分流：≥设计分辨率 = 全帧（走 PredictFull：归一化→裁 ROI→推理，与运行时同链路）；
+    /// 小图 = aicollect 时代的预裁 ROI（直接缩放推理）。</summary>
+    public static EvalReport Evaluate(PassabilitySensor sensor, string datasetDir, int designW, int designH)
     {
         string csvPath = Path.Combine(datasetDir, "labels.csv");
         if (!File.Exists(csvPath))
@@ -41,7 +43,12 @@ public static class AiEvaluator
             if (!File.Exists(imagePath)) imagePath = Path.Combine(datasetDir, label, file); // 兼容 子目录/label/文件名 布局
             using var img = Cv2.ImRead(imagePath, ImreadModes.Color);
             if (img.Empty()) continue;
-            var result = sensor.Predict(img);
+            // 全帧必须走与运行时一致的 预处理→裁ROI 链路；直接 Predict 会把整屏压扁成模型输入，领域完全错位
+            PassabilityResult result;
+            if (img.Width >= designW && img.Height >= designH)
+                result = sensor.PredictFull(img).Result;
+            else
+                result = sensor.Predict(img);
             latencies.Add(result.LatencyMs);
             confusion[Array.IndexOf(ClassNames, label), (int)result.Class]++;
         }

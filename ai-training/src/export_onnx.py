@@ -1,6 +1,6 @@
 """checkpoint → ONNX。用法:
   python src/export_onnx.py --ckpt runs/mbv3s_best.pt \
-      --out ../DeltaUnlimited/assets/ai/models/passability_v1.onnx
+      --out ../assets/ai/models/passability_v1.onnx
 导出后手动同步两处：data/ai_vision.json 的 model 字段、assets/ai/models/manifest.json 的 file/classes。
 """
 
