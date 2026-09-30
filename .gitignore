@@ -373,6 +373,10 @@ ai-training/runs/
 ai-training/.venv-smoke/
 ai-training/.venv-train/
 
+# 金标集只入库 ROI 小图与标签，原始全帧截图与备份文件不上传（游戏素材版权）
+assets/ai/golden/full_*.jpg
+assets/ai/golden/*.bak
+
 
 # 其他 AI 工具工件
 .zcodeignore
