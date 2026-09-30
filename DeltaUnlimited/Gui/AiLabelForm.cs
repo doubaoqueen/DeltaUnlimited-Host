@@ -24,7 +24,7 @@ public sealed class AiLabelForm : Form
         Text = "AI 素材标注器（airecord 事后标注）";
         KeyPreview = true;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(1476, 640);
+        ClientSize = new Size(1476, 656);
         MinimumSize = new Size(1100, 620);
         BackColor = Color.FromArgb(30, 30, 30);
 
@@ -40,13 +40,19 @@ public sealed class AiLabelForm : Form
             return pb;
         }
 
-        _pbFull = NewBox(12, 12, 960, 540);        // 1920×1080 全帧 2:1
-        _pbRoi = NewBox(984, 12, 480, 240);        // ROI 800×400 2:1
+        _pbFull = NewBox(12, 12, 960, 528);        // 1920×1080 全帧 2:1，随窗口上下伸缩
+        _pbFull.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
+        _pbRoi = NewBox(984, 12, 480, 240);        // ROI 800×400 2:1，贴右缘
+        _pbRoi.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         NewLabel(984, 262, 480, 150, out _lblInfo);
-        NewLabel(984, 420, 480, 96, out _lblStats);
-        NewLabel(12, 566, 1452, 60, out _lblKeys);
+        _lblInfo.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        NewLabel(984, 420, 480, 110, out _lblStats);
+        _lblStats.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        NewLabel(12, 550, 1452, 94, out _lblKeys);
+        _lblKeys.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+        _lblKeys.Font = new Font(Font.FontFamily, 9f);
         _lblKeys.Text = "左手打标：A=可通行(passable)  S=不可通行(blocked)  D=无地面(no_ground)  F=背景(background)  X=丢弃(discard)   右手翻页：←/→  N=下一个未标  M=清理缺失帧  Esc=退出\n" +
-                        "数字键 1/2/0/B 仍兼容（与 aicollect 同键位）。每次打标即时写盘，无需保存；回翻旧图按键即可复标。启动默认跳到第一个未标帧（命令行 --start first/行号 可改）。";
+                        "G=跳转（输行号或文件名片段）  PgUp/PgDn=快翻±100  数字键 1/2/0/B 兼容 aicollect。即时落盘；回翻按键即可复标。启动默认第一个未标帧（命令行 --start first/行号 可改）。";
 
         // 启动行号由命令行解析（缺省=第一个未标帧；全标完=第一个文件完好的帧进入复览）
         MoveTo(Math.Clamp(startIndex, 0, Math.Max(0, _store.RowCount - 1)));
@@ -77,6 +83,9 @@ public sealed class AiLabelForm : Form
             case Keys.M: ApplyDiscardMissing(); break;
             case Keys.Right: MoveTo(_index + 1); break;
             case Keys.Left: MoveTo(_index - 1); break;
+            case Keys.PageDown: MoveTo(_index + 100); break;
+            case Keys.PageUp: MoveTo(_index - 100); break;
+            case Keys.G: JumpDialog(); break;
             case Keys.N: NextUnlabeled(); break;
             case Keys.Escape: Close(); break;
             default: return;
@@ -129,6 +138,53 @@ public sealed class AiLabelForm : Form
             }
         }
         MoveTo(_index); // 全部标完，停在原地
+    }
+
+    /// <summary>G 键：弹窗跳转到任意一张——输入行号（1 基，同 [N/M] 显示）或文件名片段（如 232739）。</summary>
+    private void JumpDialog()
+    {
+        var input = new TextBox { Left = 12, Top = 26, Width = 320 };
+        var ok = new Button { Text = "跳转", DialogResult = DialogResult.OK, Left = 12, Top = 58, Width = 90 };
+        var cancel = new Button { Text = "取消", DialogResult = DialogResult.Cancel, Left = 110, Top = 58, Width = 90 };
+        using var dlg = new Form
+        {
+            Text = "跳转到…",
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            StartPosition = FormStartPosition.CenterParent,
+            MinimizeBox = false,
+            MaximizeBox = false,
+            ClientSize = new Size(344, 98),
+            ShowInTaskbar = false,
+        };
+        dlg.Controls.Add(new Label { Text = "行号（如 500）或文件名片段（如 232739）：", Left = 12, Top = 4, AutoSize = true, ForeColor = Color.FromArgb(224, 224, 224) });
+        dlg.Controls.Add(input);
+        dlg.Controls.Add(ok);
+        dlg.Controls.Add(cancel);
+        dlg.AcceptButton = ok;
+        dlg.CancelButton = cancel;
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+        JumpTo(input.Text.Trim());
+    }
+
+    private void JumpTo(string query)
+    {
+        if (query.Length == 0) return;
+        if (int.TryParse(query, out int row))
+        {
+            MoveTo(row - 1); // 窗口显示 1 基
+            return;
+        }
+        int n = _store.RowCount;
+        for (int step = 1; step <= n; step++) // 文件名片段：从当前往后找，绕一圈
+        {
+            int i = (_index + step) % n;
+            if (_store.Rows[i].RelPath.Contains(query, StringComparison.OrdinalIgnoreCase))
+            {
+                MoveTo(i);
+                return;
+            }
+        }
+        _lblInfo.Text = $"⚠ 没找到文件名含 “{query}” 的帧（当前 {_index + 1}/{n}）";
     }
 
     private void MoveTo(int index)

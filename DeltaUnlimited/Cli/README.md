@@ -38,7 +38,7 @@
 | 命令 | 用途 | 说明 |
 |---|---|---|
 | `airecord [--map] [--season] [--interval 毫秒] [--max-gb]` | **零按键素材录制器** | 自动存全帧（默认 1-2s 随机 + 帧差去重），正常打游戏即可；全帧将来直接喂 YOLO |
-| `ailabel [--start unlabeled\|first\|行号]` | **图形化标注器** | 左手 A/S/D/F 打标 + 右手 ←/→ 翻页（兼容 1/2/0/B），X 丢弃、N 跳下一未标、M 清缺失帧；启动默认跳第一个未标帧（续标不用找位置），`--start first` 从头复览、`--start 430` 落到指定行；裁 ROI 写回训练 manifest，支持回翻复标，即时落盘 |
+| `ailabel [--start unlabeled\|first\|行号]` | **图形化标注器** | 左手 A/S/D/F 打标 + 右手 ←/→ 翻页（兼容 1/2/0/B），X 丢弃、N 跳下一未标、M 清缺失帧、G 弹窗跳任意张（行号/文件名片段）、PgUp/PgDn ±100；启动默认跳第一个未标帧（续标不用找位置），`--start first` 从头复览、`--start 430` 落到指定行；裁 ROI 写回训练 manifest，支持回翻复标，即时落盘 |
 | `roitune [截图路径]` | **ROI 调参器** | 实时移动绿框标定模型视野，2:1 锁自动联动 input_size，回车保存 `ai_vision.json` |
 | `aicollect [--map] [--season]` | 边玩边标（备用） | 控制台抢焦点式直播标注，键位 1/2/0/b 与 ailabel 同义 |
 | `aieval [模型] [数据集目录]` | 金标集门禁评估 | 混淆矩阵 + macro-F1（≥0.85 才过门禁） |
