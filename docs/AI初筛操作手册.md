@@ -163,6 +163,8 @@ cd D:/MeineArbeit/DeltaUnlimited/ai-training
 | has_enemy / has_loot_signal / has_prompt | 金帧标记 | **YOLO 素材池**（N5 画框优先从这挑） |
 | quality | 清晰/模糊/黑屏/过曝 | 黑屏过曝淘汰 |
 | confidence | 0-1 | ⚠️ 实测区分度低（v2 prompt 首轮全 ≥0.8），**勿作复核优先级依据**；改 prompt 后重新观察 |
+| **label_hint** | passable / blocked / no_ground / 无法判断 | **VLM 建议的训练标签（v4 起）**：ailabel 右侧面板会与人工标签直接对照（一致/分歧），audit.py 出三分类混淆矩阵。仍是参考，**绝不是标签** |
+| prompt_v | 提示词版本（当前 v4） | 版本可比性：改 PROMPT 后旧结果不可比，需 `--refresh` 全量重筛 |
 | error | 失败原因（空=成功） | 非空行不计入漏斗 |
 
 **漏斗读法**（脚本结束会打印）：`初筛总数 → roi_usable=true（待人工）+ 金帧（YOLO 池）`。原则：**被淘汰的帧不是丢了**，只是不值得人工看，随时 `--refresh` 可重筛。
@@ -172,8 +174,9 @@ cd D:/MeineArbeit/DeltaUnlimited/ai-training
 当前版本（手动两段式）：
 
 1. `prescreen.py` 跑完 → 打开 prescreen.csv 或看漏斗统计，心里有数；
-2. `ailabel` 打标照常——**右侧「🤖 VLM 初筛」面板会实时显示当前帧的初筛判断**（roi_usable / scene / occlusion / 时段天气 / quality / conf / 金帧标记；无记录或判定失败也会明说），标题行固定标注「参考，不是训练标签」。人工打标时把 VLM 标签当"参考答案"看：它说 roi_usable=false 的帧，大概率是 no_ground 或直接 X 丢弃。
+2. `ailabel` 打标照常——**右侧「🤖 VLM 初筛」面板会实时显示当前帧的初筛判断**（roi_usable / **建议标签 label_hint 及与你标签的一致/分歧** / scene / occlusion / 时段天气 / quality / conf / 金帧标记；无记录或判定失败也会明说），标题行固定标注「参考，不是训练标签」。人工打标时把 VLM 标签当"参考答案"看：它说 roi_usable=false 的帧，大概率是 no_ground 或直接 X 丢弃。
    ⚠️ 仍待办：**出帧顺序还没按初筛结果过滤/排序**（目前仍是 manifest 顺序），所以"被淘汰的帧"也会依次出现——只是面板会告诉你它被淘汰了。
+   ⚠️ **建议标签需要 v4 初筛才有**：老结果没有 label_hint 列，面板会提示"旧版初筛无此列"——跑一次 `prescreen.py --refresh` 重筛即可（2581 帧约 20-50 分钟，需 vLLM 服务在岗）。
 
 打标完成后对账：把 manifest 的人工标签与 prescreen 的预判对一遍（抽 30-50 张即可），统计 VLM 的方向性准确率——这决定下一轮你敢把多少决定权交给它。
 
@@ -185,6 +188,7 @@ cd D:/MeineArbeit/DeltaUnlimited/ai-training
 4. **prompt 是版本化的**：改 PROMPT 后旧结果不可比，必须 `--refresh` 重筛。
    **v2（2026-09-29）修订记录**：首轮 v1 prompt 出现两类语义漂移——① `occlusion=UI覆盖` 占 81%（模型把整帧的正常 HUD 当成了遮挡）；② 金帧检测过敏（结算界面的物品图标被算成 has_prompt）。v2 把 occlusion 显式限定为"只评价图2 区域"，金帧三项显式排除"菜单/结算/背包里的图标"，并把各字段的判定定义写进 prompt。
    **v3（2026-09-29）修订记录**：audit.py 对账发现"VLM 错杀 24 帧，其中 19 帧人工标 blocked"——模型把 roi_usable 理解成"是否看到地面"，于是"满屏是墙"的帧被淘汰，但这些帧恰恰要标 blocked。v3 把 roi_usable 定义改为"能否判断'往前走是否会被挡'（看到明确障碍也算 true）"。经验：**roi_usable 的语义是"可判定性"而非"有地面"，prompt 每一次歧义都会变成系统性漏检**。
+   **v4（2026-09-30）修订记录**：新增 `label_hint`（建议训练标签：passable/blocked/no_ground）与 `prompt_v` 两列，供 ailabel 现场对照与 audit.py 三分类对账。⚠️ **旧结果无此列**（表头会自动升级并留 `.bak` 备份，旧行留空），要拿到建议标签需 `prescreen.py --refresh` 重筛。
 5. **图片分辨率固定发 1280 宽**：更大会爆显存/变慢，更小会丢判断依据——改了就要重筛。
 6. **服务空闲也占 9.6GB 显存**：不用的时候停掉，别让训练排队等一个闲着的服务。
 7. **失败帧下次自动重试**：单帧失败（网络抖动/解析失败）记 error 列继续下一张；error 非空的帧被视为"未判定"，下次再跑 prescreen.py 会自动重试，无需手动补筛（`--refresh` 只在 prompt 改版/换模型需要全量重判时用）。重试成功后 CSV 里新旧行并存，按 relpath 后行覆盖前行，统计不重复计数。

@@ -15,7 +15,9 @@ public sealed record PrescreenRow(
     string HasPrompt,
     string Quality,
     string Confidence,
-    string Error)
+    string Error,
+    string LabelHint = "",
+    string PromptV = "")
 {
     /// <summary>是否成功判定（error 为空）。失败行不显示判定结论，只提示失败原因。</summary>
     public bool Judged => string.IsNullOrWhiteSpace(Error);
@@ -27,6 +29,12 @@ public sealed record PrescreenRow(
         HasEnemy.Trim().Equals("True", StringComparison.OrdinalIgnoreCase) ||
         HasLootSignal.Trim().Equals("True", StringComparison.OrdinalIgnoreCase) ||
         HasPrompt.Trim().Equals("True", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>VLM 建议的训练标签（passable/blocked/no_ground）；老版初筛结果为空。</summary>
+    public string Hint => LabelHint.Trim().ToLowerInvariant();
+
+    /// <summary>是否给出了可用的建议标签（老版 prescreen 结果没有这一列）。</summary>
+    public bool HasHint => Hint is "passable" or "blocked" or "no_ground";
 }
 
 /// <summary>初筛结果查询（record/prescreen.csv → 按 relpath 索引）与标注界面展示文本（纯函数，可单测）。</summary>
@@ -52,7 +60,9 @@ public static class PrescreenLookup
                 var p = line.Split(',');
                 if (p.Length < 11) continue; // 残行跳过（error 里已把逗号替换为中文分号）
                 var row = new PrescreenRow(p[0].Trim(), p[1].Trim(), p[2].Trim(), p[3].Trim(), p[4].Trim(),
-                    p[5].Trim(), p[6].Trim(), p[7].Trim(), p[8].Trim(), p[9].Trim(), p[10].Trim());
+                    p[5].Trim(), p[6].Trim(), p[7].Trim(), p[8].Trim(), p[9].Trim(), p[10].Trim(),
+                    p.Length > 11 ? p[11].Trim() : "",      // label_hint（v4 起；老行留空）
+                    p.Length > 12 ? p[12].Trim() : "");     // prompt_v
                 map[Normalize(row.Relpath)] = row; // 同 relpath 后行覆盖前行（重筛语义）
             }
         }
@@ -63,8 +73,9 @@ public static class PrescreenLookup
         return map;
     }
 
-    /// <summary>标注界面展示文本（多行）：标题行明确"参考、非标签"，正文给出分流结论与环境元数据。</summary>
-    public static string FormatForLabel(PrescreenRow? row)
+    /// <summary>标注界面展示文本（多行）：标题行明确"参考、非标签"，正文给出分流结论、**建议标签**、
+    /// 环境元数据，并在传入人工标签时高亮"与你的标签是否分歧"（分歧正是 audit.py 要统计的对象）。</summary>
+    public static string FormatForLabel(PrescreenRow? row, string humanLabel = "")
     {
         var sb = new StringBuilder();
         sb.AppendLine("🤖 VLM 初筛（参考，不是训练标签）");
@@ -81,6 +92,21 @@ public static class PrescreenLookup
         }
 
         sb.Append(row.RoiUsableTrue ? "roi_usable=✅可用（值得人工看）" : "roi_usable=⛔淘汰（大概率 no_ground 或可直接 X 丢弃）").Append('\n');
+
+        // 建议标签（v4 起）：与人工标签直接对照
+        if (row.HasHint)
+        {
+            sb.Append($"建议标签: {row.Hint}（参考）");
+            string human = (humanLabel ?? "").Trim().ToLowerInvariant();
+            if (human is "passable" or "blocked" or "no_ground")
+                sb.Append(row.Hint == human ? "  ✅与你的标签一致" : $"  ⚠ 与你的标签分歧（你={human}）");
+            sb.Append('\n');
+        }
+        else
+        {
+            sb.Append("建议标签: （旧版初筛无此列——跑 prescreen.py --refresh 重筛可补）").Append('\n');
+        }
+
         sb.Append($"scene={row.Scene}｜occlusion={row.Occlusion}｜quality={row.Quality}").Append('\n');
         sb.Append($"时段天气={row.TimeWeather}｜conf={row.Confidence}");
         if (row.IsGoldFrame)

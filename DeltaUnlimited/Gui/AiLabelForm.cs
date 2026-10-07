@@ -212,7 +212,7 @@ public sealed class AiLabelForm : Form
         bool loaded = _store.Open(_index);
 
         RefreshImages(loaded ? _store.RenderFull() : null, loaded ? _store.RenderRoi() : null);
-        _lblVlm.Text = PrescreenLookup.FormatForLabel(_store.PrescreenFor(_index));
+        _lblVlm.Text = PrescreenLookup.FormatForLabel(_store.PrescreenFor(_index), row.Label);
         _lblInfo.Text = $"[{_index + 1}/{n}]  {row.RelPath}\n" +
                         $"地图 {row.Map}｜赛季 {row.Season}｜采集于 {row.Created}\n" +
                         "状态: " + (!loaded ? "⚠ 全帧文件缺失（按 M 一键清理缺失帧 / X 丢弃此帧 / → 跳过）"

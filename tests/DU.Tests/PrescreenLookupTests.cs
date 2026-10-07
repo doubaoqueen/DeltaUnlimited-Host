@@ -50,6 +50,68 @@ public class PrescreenLookupTests
     }
 
     [Fact]
+    public void Load_ParsesLabelHintAndPromptVersion()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "du_pre2_" + Guid.NewGuid().ToString("N"));
+        string dir = Path.Combine(root, "ai-training", "datasets", "record");
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllLines(Path.Combine(dir, "prescreen.csv"), new[]
+            {
+                "relpath,scene,roi_usable,occlusion,time_weather,has_enemy,has_loot_signal,has_prompt,quality,confidence,error,label_hint,prompt_v",
+                @"full\new.jpg,对局内,True,无,白天,False,False,False,清晰,0.8,,blocked,v4",
+                @"full\old.jpg,对局内,True,无,白天,False,False,False,清晰,0.8,", // 旧版 11 列：无 label_hint
+            });
+
+            var map = PrescreenLookup.Load(root);
+            var nw = map[PrescreenLookup.Normalize(@"full\new.jpg")];
+            Assert.True(nw.HasHint);
+            Assert.Equal("blocked", nw.Hint);
+            Assert.Equal("v4", nw.PromptV);
+
+            var old = map[PrescreenLookup.Normalize(@"full\old.jpg")];
+            Assert.False(old.HasHint);   // 旧行没有建议标签，界面提示重筛
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void FormatForLabel_WithHint_ShowsSuggestion()
+    {
+        var row = new PrescreenRow(@"full\a.jpg", "对局内", "True", "无", "白天", "False", "False", "False", "清晰", "0.8", "", "blocked", "v4");
+        string text = PrescreenLookup.FormatForLabel(row);
+        Assert.Contains("建议标签: blocked", text);
+        Assert.Contains("参考", text);
+    }
+
+    [Fact]
+    public void FormatForLabel_HintMatchesHuman_ShowsAgree()
+    {
+        var row = new PrescreenRow(@"full\a.jpg", "对局内", "True", "无", "白天", "False", "False", "False", "清晰", "0.8", "", "blocked", "v4");
+        Assert.Contains("✅与你的标签一致", PrescreenLookup.FormatForLabel(row, "blocked"));
+    }
+
+    [Fact]
+    public void FormatForLabel_HintDiffersFromHuman_ShowsDivergence()
+    {
+        var row = new PrescreenRow(@"full\a.jpg", "对局内", "True", "无", "白天", "False", "False", "False", "清晰", "0.8", "", "blocked", "v4");
+        string text = PrescreenLookup.FormatForLabel(row, "passable");
+        Assert.Contains("分歧", text);
+        Assert.Contains("你=passable", text);
+    }
+
+    [Fact]
+    public void FormatForLabel_LegacyRowWithoutHint_HintsRefresh()
+    {
+        var row = new PrescreenRow(@"full\a.jpg", "对局内", "True", "无", "白天", "False", "False", "False", "清晰", "0.8", "");
+        Assert.Contains("旧版初筛无此列", PrescreenLookup.FormatForLabel(row, "passable"));
+    }
+
+    [Fact]
     public void FormatForLabel_Null_ShowsNoRecord()
     {
         string text = PrescreenLookup.FormatForLabel(null);
