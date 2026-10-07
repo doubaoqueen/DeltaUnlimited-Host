@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "说明": "AI 视觉感知模块配置（阶段1：地面可通行性三分类）。红线：模型仅做感知传感器，决策权全在 C# 状态机；enabled=false 即完全回退原始守卫。ep=auto 表示 DirectML(GPU) 优先、失败自动回退 CPU（低配笔记本）。runtime_threads 实测 4 最优（默认全核反而慢且 p99 抖动大）。ROI/input_size 2026-09-28 由用户经 roitune 标定（648×324 标准 2:1 → 输入 112×224）；当前 model 为 v0 placebo（随机权重，仅供管线联调，不可用于生产判断）。",
+  "说明": "AI 视觉感知模块配置（阶段1：地面可通行性三分类）。红线：模型仅做感知传感器，决策权全在 C# 状态机；enabled=false 即完全回退原始守卫。ep=auto 表示 DirectML(GPU) 优先、失败自动回退 CPU（低配笔记本）。runtime_threads 实测 4 最优（默认全核反而慢且 p99 抖动大）。ROI/input_size 2026-09-28 由用户经 roitune 标定（648×324 标准 2:1 → 输入 112×224）。当前 model=passability_v1.onnx（val macro-F1 0.8722，observe-only 观察期）；v2 候选金标 0.657 未过执行线，v0 placebo 仅管线占位不可用于判断。金标门禁三档：≥0.85 允许 enforce / 0.60-0.85 强制仅观察 / <0.60 自动禁用；运行期矛盾率超限同样自动禁用并写回本文件。",
   "enabled": true,
   "model": "assets/ai/models/passability_v1.onnx",
   "ep": "auto",

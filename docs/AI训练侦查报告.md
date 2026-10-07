@@ -2,6 +2,8 @@
 
 状态：**侦查结论**（2026-09-27，基于 feat/ai-vision 分支现状盘点 + 业界调研）。回答："以计算机视觉识别的能力完成自动跑刀，应该如何训练？需要什么训练素材？"
 
+> **状态更新（2026-09-29 复核）**：本文 §0/§1 写作时（09-27）的"占位模型 + 空数据集"现状**已推进**——可通行性 **v1 已上线**（val macro-F1 0.8722，`data/ai_vision.json` 当前 model=`passability_v1.onnx`，observe-only 观察期）；已标注分类帧 **1740 张**（passable 1205 / blocked 488 / no_ground 43 / background 4）、原始录制帧 **2581 张**（`airecord`）、金标集 **376 张**（`assets/ai/golden/labels.csv` 377 行，独立采集不外传）；门禁升级为**三档制**（≥0.85 允许 enforce / 0.60-0.85 强制仅观察 / <0.60 自动禁用，运行期矛盾率超限亦自动禁用）；v2 候选模型金标 0.657 未过执行线，配置保持 v1。§2-§7 的方案与计划仍然有效。新增工具：`aiprobe`（实时/静态探针）、`airecord`（零按键录制）、`roitune`（ROI 调参，已标定 592,656,648,324）。
+
 继承关系：不推翻 `docs/跑刀方案.md`（K0-K6 路线、感知分表、"禁止预设路线"）与 `docs/导航设计.md`（标点+HUD 伺服选型、N1-N5），本文在其上回答"训练"这一件事的完整方案。新人前置知识见 `docs/AI训练学习路径.md`。
 
 ## 0. 结论（TL;DR）
@@ -18,16 +20,17 @@
 | 采集 | `dotnet run -- aicollect`（边玩边标 4Hz，1/2/0/b 四键，manifest 带 `map,season,source` 列，JPEG q80 直落 `ai-training/datasets/passability/`） | ✅ 可用 |
 | 训练 | `ai-training/src/train.py`（MobileNetV3-Small / tiny 两档，输入 112×224，加权交叉熵 + 余弦退火 + 分层切分 + 颜色/翻转增广，按 val macro-F1 存 best） | ✅ 可用 |
 | 导出 | `export_onnx.py` → `assets/ai/models/`，配 `manifest.json`；预处理常量（ImageNet mean/std、类别序）与 C# 端 `PassabilitySensor` 一字不差对齐 | ✅ 可用 |
-| 门禁 | `dotnet run -- aieval` 金标集回放，macro-F1 < 0.85 自动禁用（赛季漂移确定性检测） | ✅ 机制就绪，金标集空 |
+| 门禁 | `dotnet run -- aieval` 金标集回放，**三档制**：macro-F1 ≥0.85 允许 enforce / 0.60-0.85 强制仅观察 / <0.60 自动禁用（赛季漂移确定性检测） | ✅ 机制就绪，金标集 376 张已建 |
 | 回流 | `logs/ai` JSONL → `import_jsonl.py` 人工复标队列；每 50 帧自动存背景负样本池 | ✅ 可用 |
 | 漂移监测 | `DriftMonitor`：贴墙守卫触发 = 免费噪声真值，矛盾率 >25%/10min 自动禁用 | ✅ 已挂进巡逻（`PatrolCommand.Escalate` → `AiVision.RecordGuardFired`） |
 | 运行时 | `OnnxRunner`（DirectML 优先/CPU 兜底，钉版 1.24.4，零拷贝缓冲）+ `PassabilityFilter` 时域滤波（5 帧窗 ≥3 帧）+ 动静分离（帧差 >12 压制） | ✅ observe-only 默认，enforce 走既有 Escalate |
-| 当前模型 | `passability_v0_placebo.onnx`（占位） | ⚠️ 待真模型替换 |
+| 当前模型 | `passability_v1.onnx`（val macro-F1 0.8722，observe-only 观察期；v2 候选金标 0.657 未过线） | ✅ 已替换占位模型 |
 | 算力 | RTX 5070（`ai-training/README.md` 已按 Blackwell 配好 torch cu128） | ✅ 本地训练够用 |
 
 缺口清单：
 
-- 数据集空（`datasets/passability/images/` 无素材）、金标集空、`item_catalog` 空表；
+- ~~数据集空~~ → 已有标注帧 1740 张（passable 1205 / blocked 488 / no_ground 43 / background 4）+ 原始录制 2581 张；**仍缺**覆盖矩阵要求的其他地图/时段/天气（§3.2），以及 YOLO 检测素材；
+- ~~金标集空~~ → 已有 376 张（每赛季需重建）；`item_catalog` 仍空表；
 - `zero_dam_points.json → loot_points` 已按跑刀方案废弃，训练链路不得引用；
 - 文档悬空引用：`ai-training/README.md` 引用的 `docs/ai视觉感知设计.md` 文件不存在（待补或删链）；
 - 已知技术局限：`train.py` 的分层切分按"行"随机，同一局/相邻帧高度相似可能同时落入 train 与 val → **val 指标偏乐观**。缓解手段是金标集（独立采集）+ 赛季切片评估；中期改进方向是按"局/session"为单位切分。

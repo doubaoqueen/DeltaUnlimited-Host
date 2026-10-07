@@ -377,6 +377,13 @@ ai-training/.venv-train/
 assets/ai/golden/full_*.jpg
 assets/ai/golden/*.bak
 
+# 工具自检产物（airecord --selftest / roitune 冒烟留下的帧，本地调试用不入库）
+ai-training/datasets/record/selftest/
+ai-training/datasets/record/selftest_crops/
+
+# manifest 快照备份（*.bak 不入库，需要时从 git 历史取）
+ai-training/datasets/**/*.bak
+
 
 # 其他 AI 工具工件
 .zcodeignore
