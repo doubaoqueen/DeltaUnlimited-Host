@@ -33,7 +33,7 @@
 - ~~金标集空~~ → 已有 376 张（每赛季需重建）；`item_catalog` 仍空表；
 - `zero_dam_points.json → loot_points` 已按跑刀方案废弃，训练链路不得引用；
 - 文档悬空引用：`ai-training/README.md` 引用的 `docs/ai视觉感知设计.md` 文件不存在（待补或删链）；
-- 已知技术局限：`train.py` 的分层切分按"行"随机，同一局/相邻帧高度相似可能同时落入 train 与 val → **val 指标偏乐观**。缓解手段是金标集（独立采集）+ 赛季切片评估；中期改进方向是按"局/session"为单位切分。
+- ~~已知技术局限：`train.py` 的分层切分按"行"随机，同一局/相邻帧高度相似可能同时落入 train 与 val → val 指标偏乐观~~ → **已修复**（commit `ad9b5c1`）：`dataset.py` 改为**按采集会话整段切分**（文件名时间戳按分钟分桶，`stratified_split`），相邻帧不再同时落入 train/val；同时修掉"训练端不 Resize 导致 train/serve 偏斜"（`make_transform` 先 Resize 到 INPUT_SIZE）。仍建议：金标集独立采集 + 赛季切片评估 + 按 map/season 分组报告（§4.1 第 1 条，尚未实现）。
 
 ## 2. 需求分解：哪些要训练、哪些不要
 
