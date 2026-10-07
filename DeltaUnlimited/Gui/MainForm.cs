@@ -36,11 +36,13 @@ public sealed class MainForm : Form
     private bool _running;
     private Task? _runTask; // 链路线程句柄（退出收尾时等它停稳，评审 P3-7）
     private volatile string _lastOutcome = "";
+    private readonly GuiSettings _settings; // 本机设置（上次工作流/模式/窗口位置）
 
     public MainForm(DataStore store, string repoRoot)
     {
         _store = store;
         _repoRoot = repoRoot;
+        _settings = store.LoadGuiSettings();
 
         Text = "DeltaUnlimited 控制面板";
         StartPosition = FormStartPosition.CenterScreen;
@@ -95,6 +97,22 @@ public sealed class MainForm : Form
         _modeBox.Items.AddRange(new object[] { "半自动（暂停点人工确认）", "全自动（跳过暂停点）" });
         _modeBox.SelectedIndex = 0;
         top.Controls.Add(_modeBox);
+
+        // ---- 应用上次设置（本机记忆：工作流/模式/窗口位置；越界或已删除则回退默认）----
+        if (!string.IsNullOrEmpty(_settings.LastWorkflow) && _workflowBox.Items.Contains(_settings.LastWorkflow))
+            _workflowBox.SelectedItem = _settings.LastWorkflow;
+        _modeBox.SelectedIndex = _settings.AutoMode ? 1 : 0;
+        if (_settings is { WindowW: > 0, WindowH: > 0 })
+        {
+            var b = new Rectangle(_settings.WindowX ?? 0, _settings.WindowY ?? 0,
+                _settings.WindowW.Value, _settings.WindowH.Value);
+            bool visible = Screen.AllScreens.Any(s => s.WorkingArea.IntersectsWith(b));
+            if (b.Width >= MinimumSize.Width && b.Height >= MinimumSize.Height && visible)
+            {
+                StartPosition = FormStartPosition.Manual;
+                Bounds = b;
+            }
+        }
 
         _startButton = new Button { Text = "▶ 开始", Width = 140, Height = 42, Margin = new Padding(24, 0, 0, 0), Font = new Font(Font.FontFamily, 11f, FontStyle.Bold) };
         _startButton.Click += (_, _) => StartChain();
@@ -154,6 +172,11 @@ public sealed class MainForm : Form
             return;
         }
         bool auto = _modeBox.SelectedIndex == 1;
+
+        // 记住本次选择（本机设置；写失败不影响运行）
+        _settings.LastWorkflow = wf;
+        _settings.AutoMode = auto;
+        _store.SaveGuiSettings(_settings);
 
         CommandUtil.ResetStop();
         SetRunning(true);
@@ -279,7 +302,16 @@ public sealed class MainForm : Form
             HideToTray();
             return;
         }
-        // 真正退出：急停并给链路线程 2s 收尾窗口（评审 P3-7：否则按键释放存在微小竞态窗口）
+        // 真正退出：记住窗口位置（最大化/最小化时不覆盖上次的普通态位置）
+        if (WindowState == FormWindowState.Normal)
+        {
+            _settings.WindowX = Bounds.X;
+            _settings.WindowY = Bounds.Y;
+            _settings.WindowW = Bounds.Width;
+            _settings.WindowH = Bounds.Height;
+            _store.SaveGuiSettings(_settings);
+        }
+        // 急停并给链路线程 2s 收尾窗口（评审 P3-7：否则按键释放存在微小竞态窗口）
         if (_running)
         {
             CommandUtil.RequestStop();

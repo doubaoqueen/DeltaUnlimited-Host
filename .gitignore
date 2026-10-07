@@ -394,3 +394,6 @@ blog/
 # 发布产物（dotnet publish -o release）
 release/
 
+# GUI 本机设置（记住上次工作流/模式/窗口位置，不入库）
+data/gui_settings.json
+
