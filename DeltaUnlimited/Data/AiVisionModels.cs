@@ -17,9 +17,9 @@ public sealed class AiVisionConfig
     [JsonPropertyName("enabled")]
     public bool Enabled { get; set; } = true;
 
-    /// <summary>ONNX 模型路径（相对仓库根）。</summary>
+    /// <summary>ONNX 模型路径（相对仓库根）。默认指向当前服役模型；仅当 ai_vision.json 缺该字段时才生效。</summary>
     [JsonPropertyName("model")]
-    public string Model { get; set; } = "assets/ai/models/passability_v0_placebo.onnx";
+    public string Model { get; set; } = "assets/ai/models/passability_v1.onnx";
 
     /// <summary>执行提供者：auto = 先试 DirectML(GPU) 失败回退 CPU；dml = 仅 DirectML；cpu = 仅 CPU。</summary>
     [JsonPropertyName("ep")]

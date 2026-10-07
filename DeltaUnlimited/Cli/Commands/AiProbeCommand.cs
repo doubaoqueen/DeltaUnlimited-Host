@@ -58,8 +58,7 @@ public static class AiProbeCommand
         {
             if (Console.KeyAvailable && Console.ReadKey(true).Key == ConsoleKey.Q) break;
             using Mat raw = CaptureService.CaptureWindowMat(hwnd, raiseAndWait: false);
-            using var norm = FrameTools.Normalize(raw, runtime.DesignWidth, runtime.DesignHeight);
-            var result = sensor.PredictFull(norm).Result;
+            var result = sensor.PredictFull(raw).Result; // PredictFull 内部已做 设计分辨率归一化→裁ROI（勿再自己 Normalize）
             frames++;
             Console.Write($"\r[{sw.Elapsed:mm\\:ss}] {result.Class} {result.Confidence * 100,5:0.0}%  " +
                           $"(blocked {result.Probs[1] * 100:0.0}% / no_ground {result.Probs[2] * 100:0.0}%)  " +

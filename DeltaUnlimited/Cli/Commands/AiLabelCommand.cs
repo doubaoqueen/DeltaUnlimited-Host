@@ -19,8 +19,20 @@ public static class AiLabelCommand
         var runtime = data.LoadRuntime();
         var cfg = data.LoadAiVision();
         using var store = AiLabelStore.Load(repoRoot, cfg, runtime.DesignWidth, runtime.DesignHeight);
+        int totalRows = store.RowCount;
+
+        // 出帧策略（只影响标注顺序/可见集合，不改数据）
+        bool onlyUsable = cmdArgs.Any(a => a.Equals("--only-usable", StringComparison.OrdinalIgnoreCase));
+        bool goldFirst = cmdArgs.Any(a => a.Equals("--gold-first", StringComparison.OrdinalIgnoreCase));
+        var (kept, filtered, goldMoved) = store.ApplyView(onlyUsable, goldFirst);
+
         int start = ResolveStart(store, cmdArgs);
         Console.WriteLine($"AI 标注器：共 {store.RowCount} 帧，未标 {store.UnlabeledCount}（{store.RecordDir}）");
+        if (onlyUsable || goldFirst)
+            Console.WriteLine($"  🎯 出帧策略：{(onlyUsable ? "--only-usable" : "")}{(onlyUsable && goldFirst ? " + " : "")}{(goldFirst ? "--gold-first" : "")}"
+                              + $"（视图 {kept}/{totalRows} 帧"
+                              + (onlyUsable ? $"，VLM 判定淘汰已过滤 {filtered} 帧" : "")
+                              + (goldFirst ? $"，金帧前移 {goldMoved} 帧" : "") + "；数据未改动）");
         Console.WriteLine(store.PrescreenedCount > 0
             ? $"  🤖 已载入 VLM 初筛结果 {store.PrescreenedCount} 条——标注时右侧会显示该帧的 VLM 判断（参考，不是标签）"
             : "  ℹ 未找到 VLM 初筛结果（ai-training/datasets/record/prescreen.csv）——标注时该区显示\"无初筛记录\"");
@@ -119,7 +131,8 @@ internal sealed class AiLabelStore : IDisposable
     private readonly string _passabilityDir;   // ai-training/datasets/passability
     private readonly AiVisionConfig _cfg;
     private readonly Rect _roi;
-    private readonly List<RecordRow> _rows = new();
+    private readonly List<RecordRow> _allRows = new();    // 数据真身（写回清单/统计用，出帧策略不动它）
+    private readonly List<RecordRow> _rows = new();        // 当前出帧视图（导航用；元素与 _allRows 是同一批对象）
     private readonly List<string> _trainLines = new();     // 训练 manifest 原始行（含表头）
     private readonly Dictionary<string, string> _trainByRecord = new(); // record relpath → 训练 ROI relpath
     private Dictionary<string, PrescreenRow> _prescreen = new();        // VLM 初筛结果（参考，非标签）
@@ -156,8 +169,8 @@ internal sealed class AiLabelStore : IDisposable
         get
         {
             int n = 0;
-            for (int i = 0; i < _rows.Count; i++)
-                if (!FileExists(i)) n++;
+            foreach (var r in _allRows)
+                if (!File.Exists(Path.Combine(_recordDir, r.RelPath))) n++;
             return n;
         }
     }
@@ -186,19 +199,53 @@ internal sealed class AiLabelStore : IDisposable
         return -1;
     }
 
-    /// <summary>一键丢弃所有"未标注且文件缺失"的帧（已标注的帧其 ROI 已在训练清单里，不动）。返回处理数量。</summary>
+    /// <summary>一键丢弃所有"未标注且文件缺失"的帧（已标注的帧其 ROI 已在训练清单里，不动）。返回处理数量。
+    /// 作用在数据真身（_allRows）上，与出帧视图无关。</summary>
     public int DiscardMissing()
     {
         int n = 0;
-        for (int i = 0; i < _rows.Count; i++)
+        for (int i = 0; i < _allRows.Count; i++)
         {
-            var row = _rows[i];
+            var row = _allRows[i];
             if (row.Label.Length != 0) continue;
-            if (FileExists(i)) continue;
-            if (SetLabel(i, "discard")) n++;
+            if (File.Exists(Path.Combine(_recordDir, row.RelPath))) continue;
+            if (SetLabel(row, "discard")) n++;
         }
         return n;
     }
+
+    /// <summary>出帧视图（只影响标注顺序与可见集合，**不改任何数据**）：
+    /// onlyUsable = 只保留"VLM 判定可用"或"无初筛记录"的帧（判定淘汰的帧不出）；
+    /// goldFirst = 金帧（敌人/物资信号/交互提示）排到最前面。返回 (视图帧数, 被过滤掉, 前移的金帧数)。</summary>
+    public (int Kept, int Filtered, int GoldMoved) ApplyView(bool onlyUsable, bool goldFirst)
+    {
+        int filtered = 0, goldMoved = 0;
+        if (onlyUsable)
+        {
+            var kept = new List<RecordRow>();
+            foreach (var r in _rows)
+            {
+                var ps = PrescreenOf(r);
+                if (ps is { Judged: true } && !ps.RoiUsableTrue) { filtered++; continue; }
+                kept.Add(r);
+            }
+            _rows.Clear();
+            _rows.AddRange(kept);
+        }
+        if (goldFirst)
+        {
+            var gold = _rows.Where(r => PrescreenOf(r) is { Judged: true } ps && ps.IsGoldFrame).ToList();
+            var rest = _rows.Where(r => !(PrescreenOf(r) is { Judged: true } ps && ps.IsGoldFrame)).ToList();
+            goldMoved = gold.Count;
+            _rows.Clear();
+            _rows.AddRange(gold);
+            _rows.AddRange(rest);
+        }
+        return (RowCount, filtered, goldMoved);
+    }
+
+    private PrescreenRow? PrescreenOf(RecordRow row)
+        => _prescreen.TryGetValue(PrescreenLookup.Normalize(row.RelPath), out var v) ? v : null;
 
     public static AiLabelStore Load(string repoRoot, AiVisionConfig cfg, int designW, int designH)
     {
@@ -217,7 +264,7 @@ internal sealed class AiLabelStore : IDisposable
             {
                 var p = line.Split(',');
                 if (p.Length < 5) continue; // 空行/残行跳过
-                store._rows.Add(new RecordRow { RelPath = p[0], Label = p[1], Map = p[2], Season = p[3], Created = p[4] });
+                store._allRows.Add(new RecordRow { RelPath = p[0], Label = p[1], Map = p[2], Season = p[3], Created = p[4] });
             }
         }
 
@@ -240,6 +287,9 @@ internal sealed class AiLabelStore : IDisposable
 
         // VLM 初筛结果（prescreen.csv）：标注时作为**参考**展示，绝不作为标签（见 docs/AI初筛操作手册.md §0）
         store._prescreen = PrescreenLookup.Load(repoRoot);
+
+        // 出帧视图初始 = 全量（调用方按 --only-usable / --gold-first 再收窄，数据真身不受影响）
+        store._rows.AddRange(store._allRows);
 
         store.Recount();
         return store;
@@ -288,7 +338,13 @@ internal sealed class AiLabelStore : IDisposable
     public bool SetLabel(int index, string label)
     {
         if (index < 0 || index >= _rows.Count) return false;
-        var row = _rows[index];
+        return SetLabel(_rows[index], label);
+    }
+
+    /// <summary>按行对象打标（出帧视图过滤后仍作用于同一批数据对象）。</summary>
+    public bool SetLabel(RecordRow row, string label)
+    {
+        if (row is null) return false;
         if (row.Label == label) return false;
         bool oldIsTrain = TrainLabels.Contains(row.Label);
         bool newIsTrain = TrainLabels.Contains(label);
@@ -349,8 +405,10 @@ internal sealed class AiLabelStore : IDisposable
 
     private void Flush()
     {
+        // ⚠️ 必须写"数据真身"（_allRows）：出帧视图可能被 --only-usable/--gold-first 过滤或重排，
+        // 若按视图写回会把被过滤的帧从清单里删掉（数据丢失）。
         var sb = new StringBuilder("relpath,label,map,season,created\n");
-        foreach (var r in _rows)
+        foreach (var r in _allRows)
             sb.Append(r.RelPath).Append(',').Append(r.Label).Append(',')
               .Append(r.Map).Append(',').Append(r.Season).Append(',').Append(r.Created).Append('\n');
         File.WriteAllText(Path.Combine(_recordDir, "record_manifest.csv"), sb.ToString());

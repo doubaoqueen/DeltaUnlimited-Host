@@ -162,8 +162,8 @@ public static class ChainCommand
                         if (uncfg.Count > 0)
                             msg += $"；未配置标记的界面: {string.Join(", ", uncfg)}";
                     }
-                    Console.WriteLine($"  👁 {msg}");
-                    Logger.Info(msg);
+                    Console.WriteLine($"  👁 {msg}（识别耗时 {ScreenDetector.LastDetectMs:F0}ms）");
+                    Logger.Info($"{msg}（识别耗时 {ScreenDetector.LastDetectMs:F0}ms）");
                     break;
                 }
 
@@ -309,8 +309,8 @@ public static class ChainCommand
                     var guess = ScreenDetector.Detect(norm, screens, repoRoot);
                     string got = guess?.Name ?? "";
                     string amb = guess is { Alternatives.Count: > 0 } ? $"（同时命中: {string.Join(", ", guess.Alternatives)}）" : "";
-                    Console.WriteLine($"  🔀 界面分流: 当前 {(got == "" ? "unknown" : got)}{amb}（置信度 {guess?.Confidence:F3}）");
-                    Logger.Info($"switch_screen: 当前 {(got == "" ? "unknown" : got)}{amb}");
+                    Console.WriteLine($"  🔀 界面分流: 当前 {(got == "" ? "unknown" : got)}{amb}（置信度 {guess?.Confidence:F3}，识别 {ScreenDetector.LastDetectMs:F0}ms）");
+                    Logger.Info($"switch_screen: 当前 {(got == "" ? "unknown" : got)}{amb}（识别 {ScreenDetector.LastDetectMs:F0}ms）");
 
                     // 弹层自动关闭：检测到带 dismiss 键的界面（空格继续类通用弹层）→ 按键关闭 → 重跑本步骤重识别。
                     // P2-5：关闭重检计入同一熔断计数——界面被误判为 space_continue 且关不掉时不再无限按空格，超限进人工确认
@@ -411,7 +411,7 @@ public static class ChainCommand
             string got = guess?.Name ?? "unknown";
             if (got != lastGot) // 界面变化才打日志（可见的轮询心跳，排查"等待期间发生了什么"）
             {
-                Console.WriteLine($"  ⏳ 等待界面 {want}{(wantAbsent ? " 消失" : " 出现")}… 当前 {got}");
+                Console.WriteLine($"  ⏳ 等待界面 {want}{(wantAbsent ? " 消失" : " 出现")}… 当前 {got}（识别 {ScreenDetector.LastDetectMs:F0}ms）");
                 Logger.Info($"等待 {want}{(wantAbsent ? "消失" : "出现")}: 当前 {got}");
                 lastGot = got;
             }

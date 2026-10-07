@@ -23,6 +23,21 @@ from model import CLASSES, IMAGENET_MEAN, IMAGENET_STD, INPUT_SIZE
 
 LABEL_TO_IDX = {name: i for i, name in enumerate(CLASSES)}
 
+_BAD_SAMPLES_WARNED: set[str] = set()
+_BAD_SAMPLES_LIMIT = 20
+
+
+def _warn_bad_sample(relpath: str, err: str) -> bool:
+    """坏样本告警去重 + 限流（前 20 条打印，之后静默）。返回是否为首次告警。"""
+    if relpath in _BAD_SAMPLES_WARNED:
+        return False
+    _BAD_SAMPLES_WARNED.add(relpath)
+    if len(_BAD_SAMPLES_WARNED) <= _BAD_SAMPLES_LIMIT:
+        print(f"⚠ 跳过无法读取的训练样本（已换一张）: {relpath} → {err[:80]}")
+        if len(_BAD_SAMPLES_WARNED) == _BAD_SAMPLES_LIMIT:
+            print(f"⚠ 坏样本已达 {_BAD_SAMPLES_LIMIT} 条，后续不再逐条打印——建议清理 manifest.csv")
+    return True
+
 
 def load_manifest(csv_path: str):
     """返回 [(relpath, label_idx)]（RowDataset / evaluate 用）。"""
@@ -144,5 +159,16 @@ class RowDataset(Dataset):
 
     def __getitem__(self, idx):
         relpath, label = self.samples[idx]
-        img = Image.open(self.root / relpath).convert("RGB")
-        return self.tf(img), label
+        # 容错：manifest 里可能残留失效路径（手动清理图片后忘了删行）。直接抛异常会中断整个训练，
+        # 这里退化为"随机换一张"并限量告警；连续 4 次都坏才报错（提示清理 manifest）。
+        for attempt in range(4):
+            try:
+                with Image.open(self.root / relpath) as im:
+                    img = im.convert("RGB")
+                return self.tf(img), label
+            except Exception as ex:  # noqa: BLE001 —— 任何读图失败都不该中断训练
+                if attempt == 0:
+                    _warn_bad_sample(relpath, str(ex))
+                idx = random.randrange(len(self.samples))
+                relpath, label = self.samples[idx]
+        raise RuntimeError(f"连续 4 次取到无法读取的图片，请清理 manifest.csv 中的失效行（示例: {relpath}）")

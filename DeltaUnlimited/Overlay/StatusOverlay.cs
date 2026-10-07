@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
+using DeltaUnlimited.Capture;
 
 namespace DeltaUnlimited.Overlay;
 
@@ -31,6 +32,22 @@ public static class StatusOverlay
         _loop = loop;
         _thread = new Thread(() => RenderLoop(loop, x, y, w, h)) { IsBackground = true, Name = "StatusOverlay" };
         _thread.Start();
+        // 截图钩子：面板悬浮在游戏画面上，会被"屏幕 DC → BitBlt"截进帧污染识别——截图瞬间隐藏自己
+        CaptureService.RegisterCaptureHooks(HideForCapture, ShowAfterCapture);
+    }
+
+    /// <summary>截图瞬间隐藏面板（截图期间不显示；面板很小，闪烁可接受）。</summary>
+    private static void HideForCapture()
+    {
+        IntPtr h = _hwnd;
+        if (h != IntPtr.Zero) _ = ShowWindow(h, SW_HIDE);
+    }
+
+    /// <summary>截图结束恢复显示（不抢焦点）。</summary>
+    private static void ShowAfterCapture()
+    {
+        IntPtr h = _hwnd;
+        if (h != IntPtr.Zero) _ = ShowWindow(h, SW_SHOWNOACTIVATE);
     }
 
     /// <summary>更新面板文本（线程安全，只置脏标记，渲染线程读取）。</summary>
@@ -46,6 +63,7 @@ public static class StatusOverlay
 
     public static void Stop()
     {
+        CaptureService.ClearCaptureHooks(); // 面板停了就别再挂钩子（否则每帧白调一次隐藏/显示）
         var loop = _loop;
         if (loop != null) loop.Stop = true; // 只停当前代线程：旧线程持有自己的状态，不会被新一次 Start 复活（评审 P2-8①）
         _thread?.Join(600);
@@ -269,6 +287,8 @@ public static class StatusOverlay
     private const uint WM_NCHITTEST = 0x0084;
     private const int HTCAPTION = 2;
     private const int HTTRANSPARENT = -1;
+    private const int SW_HIDE = 0;
+    private const int SW_SHOWNOACTIVATE = 4;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct MSG

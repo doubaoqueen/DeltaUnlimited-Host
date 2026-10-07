@@ -257,6 +257,24 @@ public static class CaptureService
         }
     }
 
+    /// <summary>截图前/后钩子：叠加在游戏画面之上的窗口（如悬浮状态面板）注册后可在截图瞬间隐藏自己，
+    /// 避免被"从屏幕 DC 拷贝"的 BitBlt 截进帧（污染识别）。钩子必须极快且不得抛异常。</summary>
+    public static void RegisterCaptureHooks(Action? preCapture, Action? postCapture)
+    {
+        PreCapture = preCapture;
+        PostCapture = postCapture;
+    }
+
+    /// <summary>注销截图钩子（悬浮面板停止时调用）。</summary>
+    public static void ClearCaptureHooks()
+    {
+        PreCapture = null;
+        PostCapture = null;
+    }
+
+    private static Action? PreCapture;
+    private static Action? PostCapture;
+
     /// <summary>从屏幕 DC 拷一块矩形区域 → 独立内存的 BGRA Mat（深拷贝，调用方负责 Dispose）。</summary>
     private static Mat CapturePixels(IntPtr hdcScreen, int srcX, int srcY, int w, int h)
     {
@@ -285,7 +303,16 @@ public static class CaptureService
             IntPtr old = SelectObject(memDc, hBitmap);
             try
             {
-                bool ok = BitBlt(memDc, 0, 0, w, h, hdcScreen, srcX, srcY, SRCCOPY | CAPTUREBLT);
+                bool ok;
+                try
+                {
+                    PreCapture?.Invoke(); // 叠加窗口在截图瞬间隐藏（否则会被截进帧）
+                    ok = BitBlt(memDc, 0, 0, w, h, hdcScreen, srcX, srcY, SRCCOPY | CAPTUREBLT);
+                }
+                finally
+                {
+                    PostCapture?.Invoke(); // 无论成败都恢复，避免面板永久隐藏
+                }
                 if (!ok) throw new Win32Exception(Marshal.GetLastWin32Error(), "BitBlt 失败");
 
                 // DIB 像素 → Mat(CV_8UC4, BGRA)，Clone 深拷贝后即可释放 GCHandle

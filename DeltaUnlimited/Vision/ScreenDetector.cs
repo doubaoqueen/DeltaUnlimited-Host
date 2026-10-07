@@ -90,16 +90,29 @@ public static class ScreenDetector
             .OrderBy(x => x)
             .ToList();
 
+    /// <summary>最近一次 Detect 的耗时（ms）。供链路日志上报，用于评估"识别是否够快"以决定轮询/等待参数
+    /// （runtime.json 的 poll_interval_ms 等）——只读、线程安全由调用上下文保证（链路单线程识别）。</summary>
+    public static double LastDetectMs { get; private set; }
+
     /// <summary>检测当前界面；无任何屏幕命中返回 null（未知界面）。
     /// 多界面同时命中时按（置信度, 命中标记数）取最优，其余界面放入 Alternatives 供调用方告警。</summary>
     public static ScreenGuess? Detect(Mat frame, ScreenTable table, string repoRoot)
     {
-        var matched = Scan(frame, table, repoRoot).Where(c => c.Matched).ToList();
-        if (matched.Count == 0) return null;
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            var matched = Scan(frame, table, repoRoot).Where(c => c.Matched).ToList();
+            if (matched.Count == 0) return null;
 
-        var best = matched.OrderByDescending(c => c.Confidence).ThenByDescending(c => c.MarkerHits).First();
-        var alts = matched.Where(c => c.Name != best.Name).Select(c => c.Name).ToList();
-        return new ScreenGuess(best.Name, best.Confidence, table.Screens[best.Name].Actions, alts);
+            var best = matched.OrderByDescending(c => c.Confidence).ThenByDescending(c => c.MarkerHits).First();
+            var alts = matched.Where(c => c.Name != best.Name).Select(c => c.Name).ToList();
+            return new ScreenGuess(best.Name, best.Confidence, table.Screens[best.Name].Actions, alts);
+        }
+        finally
+        {
+            sw.Stop();
+            LastDetectMs = sw.Elapsed.TotalMilliseconds;
+        }
     }
 
     /// <summary>解析标记区域：显式 region 数组优先，其次按名查 zones 表。

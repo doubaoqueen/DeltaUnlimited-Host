@@ -20,12 +20,14 @@ from model import CLASSES, INPUT_SIZE, build
 
 
 def per_class_f1(cm, n: int) -> list[float]:
+    """逐类 F1。⚠️ 某类在 val 中完全没有样本（tp=fp=fn=0）时记 0.0——早期版本记 1.0，
+    会让 macro-F1 虚高、门禁误放行（2026-09-30 修正；缺类由调用处打印告警）。"""
     f1s = []
     for c in range(n):
         tp = cm[c][c]
         fp = sum(cm[i][c] for i in range(n)) - tp
         fn = sum(cm[c]) - tp
-        f1s.append(0.0 if tp == 0 and (fp + fn) > 0 else (2 * tp / (2 * tp + fp + fn) if (tp + fp + fn) > 0 else 1.0))
+        f1s.append(0.0 if tp == 0 else 2 * tp / (2 * tp + fp + fn))
     return f1s
 
 
@@ -39,7 +41,9 @@ def main():
     ap.add_argument("--num-workers", type=int, default=4)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--weight-decay", type=float, default=0.0, help="AdamW 权重衰减（抗过拟合）")
-    ap.add_argument("--weight-cap", type=float, default=0.0, help="类别逆频权重上限，0=不设限；小类样本极少时防损失被其垄断")
+    ap.add_argument("--weight-cap", type=float, default=5.0,
+                    help="类别逆频权重上限（默认 5.0）：no_ground 这类极小样本的权重被压到上限内，"
+                         "防损失被单一小类垄断；0 = 不设限（旧行为）")
     ap.add_argument("--scratch", action="store_true", help="不从 ImageNet 预训练起步（对照实验用）")
     args = ap.parse_args()
 
@@ -92,6 +96,12 @@ def main():
                     cm[y][p] += 1
         f1s = per_class_f1(cm, n_cls)
         f1 = sum(f1s) / n_cls
+        if epoch == 1:
+            empty = [CLASSES[c] for c in range(n_cls)
+                     if sum(cm[c]) == 0 and sum(cm[i][c] for i in range(n_cls)) == 0]
+            if empty:
+                print(f"⚠ val 集完全没有类别 {empty}——这些类按 F1=0 计入 macro-F1，指标会偏低；"
+                      f"请补采并确保会话级切分后 val 覆盖三类")
         print(f"epoch {epoch:3d}/{args.epochs}  loss {loss.item():.4f}  val_macro_f1 {f1:.4f}  "
               f"各类 {[round(x, 3) for x in f1s]}  ({time.time()-t0:.1f}s)")
         if f1 > best_f1:
