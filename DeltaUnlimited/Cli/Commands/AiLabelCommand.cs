@@ -21,6 +21,9 @@ public static class AiLabelCommand
         using var store = AiLabelStore.Load(repoRoot, cfg, runtime.DesignWidth, runtime.DesignHeight);
         int start = ResolveStart(store, cmdArgs);
         Console.WriteLine($"AI 标注器：共 {store.RowCount} 帧，未标 {store.UnlabeledCount}（{store.RecordDir}）");
+        Console.WriteLine(store.PrescreenedCount > 0
+            ? $"  🤖 已载入 VLM 初筛结果 {store.PrescreenedCount} 条——标注时右侧会显示该帧的 VLM 判断（参考，不是标签）"
+            : "  ℹ 未找到 VLM 初筛结果（ai-training/datasets/record/prescreen.csv）——标注时该区显示\"无初筛记录\"");
         Console.WriteLine($"  启动位置：第 {start + 1} 帧（--start unlabeled=第一个未标（缺省）/ first=从头复览 / 行号=指定行，按窗口 [N/M] 的 1 基行号）");
         if (store.MissingCount > 0)
             Console.WriteLine($"⚠ {store.MissingCount} 帧清单有记录但全帧文件已不在（可能被手动清理）——窗口内按 M 一键丢弃，或 X 逐张丢弃");
@@ -119,6 +122,7 @@ internal sealed class AiLabelStore : IDisposable
     private readonly List<RecordRow> _rows = new();
     private readonly List<string> _trainLines = new();     // 训练 manifest 原始行（含表头）
     private readonly Dictionary<string, string> _trainByRecord = new(); // record relpath → 训练 ROI relpath
+    private Dictionary<string, PrescreenRow> _prescreen = new();        // VLM 初筛结果（参考，非标签）
     private Mat? _frame;                                   // 当前打开的全帧（窗体一次只看一张）
 
     private AiLabelStore(string recordDir, string passabilityDir, AiVisionConfig cfg, Rect roi)
@@ -134,6 +138,16 @@ internal sealed class AiLabelStore : IDisposable
     public int RowCount => _rows.Count;
     public int UnlabeledCount => _rows.Count(r => r.Label.Length == 0);
     public bool HasFrame => _frame is not null;
+
+    /// <summary>已载入的 VLM 初筛结果条数（启动时打印，便于确认"标注时能看到 VLM 判断"是否生效）。</summary>
+    public int PrescreenedCount => _prescreen.Count;
+
+    /// <summary>该帧的 VLM 初筛结果（无记录返回 null）。**参考信息，不是标签**。</summary>
+    public PrescreenRow? PrescreenFor(int index)
+    {
+        if (index < 0 || index >= _rows.Count) return null;
+        return _prescreen.TryGetValue(PrescreenLookup.Normalize(_rows[index].RelPath), out var row) ? row : null;
+    }
     public IReadOnlyDictionary<string, int> TrainCounts { get; private set; } = new Dictionary<string, int>();
 
     /// <summary>清单有记录但全帧文件已不在磁盘的数量（可能被手动清理；这类帧无法打标，只能丢弃或忽略）。</summary>
@@ -223,6 +237,9 @@ internal sealed class AiLabelStore : IDisposable
                 if (p.Length >= 2) store._trainByRecord[p[0]] = p[1];
             }
         }
+
+        // VLM 初筛结果（prescreen.csv）：标注时作为**参考**展示，绝不作为标签（见 docs/AI初筛操作手册.md §0）
+        store._prescreen = PrescreenLookup.Load(repoRoot);
 
         store.Recount();
         return store;

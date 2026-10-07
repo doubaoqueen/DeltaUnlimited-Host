@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Windows.Forms;
+using DeltaUnlimited.Cli;
 using DeltaUnlimited.Cli.Commands;
 
 namespace DeltaUnlimited.Gui;
@@ -12,6 +13,7 @@ public sealed class AiLabelForm : Form
     private readonly AiLabelStore _store;
     private readonly PictureBox _pbFull = new();
     private readonly PictureBox _pbRoi = new();
+    private readonly Label _lblVlm = new();
     private readonly Label _lblInfo = new();
     private readonly Label _lblStats = new();
     private readonly Label _lblKeys = new();
@@ -24,8 +26,8 @@ public sealed class AiLabelForm : Form
         Text = "AI 素材标注器（airecord 事后标注）";
         KeyPreview = true;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(1476, 656);
-        MinimumSize = new Size(1100, 620);
+        ClientSize = new Size(1476, 724);
+        MinimumSize = new Size(1100, 688);
         BackColor = Color.FromArgb(30, 30, 30);
 
         PictureBox NewBox(int x, int y, int w, int h)
@@ -40,15 +42,20 @@ public sealed class AiLabelForm : Form
             return pb;
         }
 
-        _pbFull = NewBox(12, 12, 960, 528);        // 1920×1080 全帧 2:1，随窗口上下伸缩
+        _pbFull = NewBox(12, 12, 960, 596);        // 1920×1080 全帧 2:1，随窗口上下伸缩
         _pbFull.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
         _pbRoi = NewBox(984, 12, 480, 240);        // ROI 800×400 2:1，贴右缘
         _pbRoi.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        NewLabel(984, 262, 480, 150, out _lblInfo);
+        NewLabel(984, 256, 480, 172, out _lblVlm); // VLM 初筛判断（参考）：紧跟 ROI 图下方，打标时正眼看得到
+        _lblVlm.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        _lblVlm.BackColor = Color.FromArgb(16, 42, 58);
+        _lblVlm.ForeColor = Color.FromArgb(150, 220, 255);
+        _lblVlm.Font = new Font("Consolas", 9.5f);
+        NewLabel(984, 432, 480, 120, out _lblInfo);
         _lblInfo.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        NewLabel(984, 420, 480, 110, out _lblStats);
+        NewLabel(984, 556, 480, 66, out _lblStats);
         _lblStats.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        NewLabel(12, 550, 1452, 94, out _lblKeys);
+        NewLabel(12, 618, 1452, 94, out _lblKeys);
         _lblKeys.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         _lblKeys.Font = new Font(Font.FontFamily, 9f);
         _lblKeys.Text = "左手打标：A=可通行(passable)  S=不可通行(blocked)  D=无地面(no_ground)  F=背景(background)  X=丢弃(discard)   右手翻页：←/→  N=下一个未标  M=清理缺失帧  Esc=退出\n" +
@@ -195,6 +202,7 @@ public sealed class AiLabelForm : Form
             _index = 0;
             _lblInfo.Text = "没有可标注素材——先跑 airecord 录制几帧再来。";
             _lblStats.Text = "";
+            _lblVlm.Text = "";
             RefreshImages(null, null);
             return;
         }
@@ -204,6 +212,7 @@ public sealed class AiLabelForm : Form
         bool loaded = _store.Open(_index);
 
         RefreshImages(loaded ? _store.RenderFull() : null, loaded ? _store.RenderRoi() : null);
+        _lblVlm.Text = PrescreenLookup.FormatForLabel(_store.PrescreenFor(_index));
         _lblInfo.Text = $"[{_index + 1}/{n}]  {row.RelPath}\n" +
                         $"地图 {row.Map}｜赛季 {row.Season}｜采集于 {row.Created}\n" +
                         "状态: " + (!loaded ? "⚠ 全帧文件缺失（按 M 一键清理缺失帧 / X 丢弃此帧 / → 跳过）"

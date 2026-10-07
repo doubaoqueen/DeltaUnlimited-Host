@@ -172,7 +172,8 @@ cd D:/MeineArbeit/DeltaUnlimited/ai-training
 当前版本（手动两段式）：
 
 1. `prescreen.py` 跑完 → 打开 prescreen.csv 或看漏斗统计，心里有数；
-2. `ailabel` 打标照常——**注意：ailabel 目前仍按 manifest 顺序出帧，尚未按 prescreen 结果过滤排序**（联动为待办）。人工打标时把 VLM 标签当"参考答案"看：它说 roi_usable=false 的帧，大概率是 no_ground 或直接 X 丢弃。
+2. `ailabel` 打标照常——**右侧「🤖 VLM 初筛」面板会实时显示当前帧的初筛判断**（roi_usable / scene / occlusion / 时段天气 / quality / conf / 金帧标记；无记录或判定失败也会明说），标题行固定标注「参考，不是训练标签」。人工打标时把 VLM 标签当"参考答案"看：它说 roi_usable=false 的帧，大概率是 no_ground 或直接 X 丢弃。
+   ⚠️ 仍待办：**出帧顺序还没按初筛结果过滤/排序**（目前仍是 manifest 顺序），所以"被淘汰的帧"也会依次出现——只是面板会告诉你它被淘汰了。
 
 打标完成后对账：把 manifest 的人工标签与 prescreen 的预判对一遍（抽 30-50 张即可），统计 VLM 的方向性准确率——这决定下一轮你敢把多少决定权交给它。
 
