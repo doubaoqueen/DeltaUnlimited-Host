@@ -3,6 +3,7 @@
 用法: python src/smoke_test.py   （需 torch/torchvision/onnx/pillow；纯 CPU 约 1 分钟）"""
 
 import random
+import _console  # noqa: F401  —— 控制台 UTF-8 护栏（GBK 终端打印 emoji 会崩）
 import shutil
 import subprocess
 import sys

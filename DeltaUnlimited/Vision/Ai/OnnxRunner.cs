@@ -23,25 +23,26 @@ public sealed class OnnxRunner : IDisposable
     /// <param name="ep">auto = 先试 DirectML 失败回退 CPU；dml = 仅 DirectML（失败抛异常）；cpu = 仅 CPU。</param>
     public OnnxRunner(string modelPath, string ep, int threads, int inputH, int inputW)
     {
-        var so = new SessionOptions();
-        so.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL;
-        if (threads > 0) so.IntraOpNumThreads = threads;
-
+        bool auto = ep.Equals("auto", StringComparison.OrdinalIgnoreCase);
+        bool wantDml = auto || ep.Equals("dml", StringComparison.OrdinalIgnoreCase);
         string provider = "CPU";
-        if (ep.Equals("auto", StringComparison.OrdinalIgnoreCase) || ep.Equals("dml", StringComparison.OrdinalIgnoreCase))
+        var so = BuildOptions(threads, wantDml, auto, out bool dmlApplied);
+        if (dmlApplied) provider = "DirectML";
+
+        try
         {
-            try
-            {
-                so.AppendExecutionProvider_DML(0);
-                provider = "DirectML";
-            }
-            catch (Exception ex) when (ep.Equals("auto", StringComparison.OrdinalIgnoreCase))
-            {
-                Console.WriteLine($"  ⚠️ DirectML(GPU) 初始化失败，回退 CPU：{ex.Message}");
-            }
+            _session = new InferenceSession(modelPath, so);
+        }
+        catch (Exception ex) when (auto && dmlApplied)
+        {
+            // auto 模式：DML 会话创建也可能失败（算子不被 DML 支持/驱动异常）——回退 CPU 重建，
+            // 而不是把异常抛给调用方（与"低配笔记本自动回退 CPU"的承诺一致）
+            Console.WriteLine($"  ⚠️ DirectML 会话创建失败，回退 CPU：{ex.Message}");
+            so = BuildOptions(threads, wantDml: false, autoFallback: true, out _);
+            provider = "CPU";
+            _session = new InferenceSession(modelPath, so);
         }
 
-        _session = new InferenceSession(modelPath, so);
         Provider = provider;
         _inputNames = new[] { _session.InputNames[0] };
         _outputNames = new[] { _session.OutputNames[0] };
@@ -58,6 +59,28 @@ public sealed class OnnxRunner : IDisposable
         OutputTensor = new DenseTensor<float>(_outputBuffer, new[] { 1, outCount });
         InputValue = FixedBufferOnnxValue.CreateFromTensor(InputTensor);
         OutputValue = FixedBufferOnnxValue.CreateFromTensor(OutputTensor);
+    }
+
+    /// <summary>构造会话选项：wantDml=false 走纯 CPU；AppendExecutionProvider_DML 失败时
+    /// autoFallback=true 降级 CPU（auto 语义），false 直接抛出（dml 严格语义）。</summary>
+    private static SessionOptions BuildOptions(int threads, bool wantDml, bool autoFallback, out bool dmlApplied)
+    {
+        var so = new SessionOptions();
+        so.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL;
+        if (threads > 0) so.IntraOpNumThreads = threads;
+        dmlApplied = false;
+        if (!wantDml) return so;
+        try
+        {
+            so.AppendExecutionProvider_DML(0);
+            dmlApplied = true;
+        }
+        catch (Exception ex)
+        {
+            if (!autoFallback) throw; // ep=dml：严格模式，保持原语义（失败即抛）
+            Console.WriteLine($"  ⚠️ DirectML(GPU) 初始化失败，回退 CPU：{ex.Message}");
+        }
+        return so;
     }
 
     private DenseTensor<float> InputTensor { get; }

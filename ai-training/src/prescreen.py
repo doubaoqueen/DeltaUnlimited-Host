@@ -11,6 +11,7 @@
 """
 
 import argparse
+import _console  # noqa: F401  —— 控制台 UTF-8 护栏（GBK 终端打印 emoji 会崩）
 import base64
 import csv
 import io

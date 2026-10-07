@@ -5,6 +5,7 @@
 """
 
 import argparse
+import _console  # noqa: F401  —— 控制台 UTF-8 护栏（GBK 终端打印 emoji 会崩）
 import json
 from pathlib import Path
 
@@ -41,7 +42,10 @@ def main():
         "confusion": ckpt.get("confusion"),
     }
     print(f"✅ 导出: {out.resolve()}（{out.stat().st_size/1e6:.2f}MB）")
-    print("同步提示：data/ai_vision.json → \"model\": \"" + "/".join(out.parts[-3:]) + "\"")
+    rel = out.resolve().as_posix()
+    marker = "/assets/ai/models/"
+    hint = "assets/ai/models/" + out.name if marker in rel else rel
+    print("同步提示：data/ai_vision.json → \"model\": \"" + hint + "\"")
     print("manifest 片段: " + json.dumps(meta, ensure_ascii=False))
 
 

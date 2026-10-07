@@ -23,7 +23,9 @@
       0.225
     ]
   },
-  "trained_on_game_version": "v1（2026-09-29，零号大坝 s5，429 帧人工标注，val macro-F1 0.8722）",
+  "trained_on_game_version": "v1（2026-09-29，零号大坝 s5；训练集为当时的 429 帧人工标注快照，val macro-F1 0.8722）",
+  "current_gate": "金标集 376 张实测 macro-F1 ≈ 0.695 → OBSERVE-ONLY（观察线 0.60 / 执行线 0.85，enforce 保持关闭）；主短板 blocked 召回",
+  "dataset_snapshot": "2026-09-30：passability manifest 1736 标注行（passable 1205 / blocked 488 / no_ground 43）——可作为下一版重训素材",
   "created": "2026-09-29",
-  "note": "正式模型经 ai-training/src/export_onnx.py 导出为 passability_vN.onnx 后，同步更新 data/ai_vision.json 的 model 字段与本文件的 file/classes"
+  "note": "正式模型经 ai-training/src/export_onnx.py 导出为 passability_vN.onnx 后，同步更新 data/ai_vision.json 的 model 字段与本文件的 file/classes。目录内还有 passability_v0_placebo.onnx（管线占位，随机权重）与 passability_v2.onnx（金标 0.657 未过执行线）"
 }

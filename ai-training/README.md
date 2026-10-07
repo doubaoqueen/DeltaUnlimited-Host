@@ -34,9 +34,9 @@
           → ai-training/datasets/passability/{images/, manifest.csv}
 ② 人工补标/清洗：直接改 manifest.csv（label 列）；错误样本删行+删图
 ③ 训练   python src/train.py --data datasets/passability --epochs 30
-          → runs/passability_best.pt
-④ 导出   python src/export_onnx.py --ckpt runs/passability_best.pt \
-            --out ../DeltaUnlimited/assets/ai/models/passability_v1.onnx
+          → runs/mbv3s_best.pt（--model tiny 时为 runs/tiny_best.pt；文件名随 --model 档位）
+④ 导出   python src/export_onnx.py --ckpt runs/mbv3s_best.pt \
+            --out ../assets/ai/models/passability_v1.onnx
           → 手动同步 data/ai_vision.json 的 model 字段 + assets/ai/models/manifest.json
 ⑤ 验证   dotnet run -- aieval                       （金标集离线门禁）
 ⑥ 重建金标集：新版本稳定后挑 ~100 张更新 assets/ai/golden/

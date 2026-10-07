@@ -7,6 +7,7 @@ VLM 对 passable vs blocked 的区分不参与对账（它从来没被问过这�
 """
 
 import csv
+import _console  # noqa: F401  —— 控制台 UTF-8 护栏（GBK 终端打印 emoji 会崩）
 from collections import Counter
 from pathlib import Path
 

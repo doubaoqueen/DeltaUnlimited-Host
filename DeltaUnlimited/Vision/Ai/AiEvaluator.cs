@@ -8,7 +8,8 @@ public static class AiEvaluator
     public static readonly string[] ClassNames = { "passable", "blocked", "no_ground" };
 
     public sealed record EvalReport(
-        int Total,
+        int Total,                 // 实际评估成功的样本数（不含缺失/无法解码的行）
+        int Skipped,               // 标注行存在但图片缺失/解码失败的数量（>0 时报告会提示）
         int[,] Confusion,          // [真实, 预测]
         double[] PerClassF1,
         double MacroF1,
@@ -37,12 +38,13 @@ public static class AiEvaluator
         int n = ClassNames.Length;
         var confusion = new int[n, n];
         var latencies = new List<double>();
+        int evaluated = 0, skipped = 0;
         foreach (var (file, label) in rows)
         {
             string imagePath = Path.Combine(datasetDir, file);
             if (!File.Exists(imagePath)) imagePath = Path.Combine(datasetDir, label, file); // 兼容 子目录/label/文件名 布局
             using var img = Cv2.ImRead(imagePath, ImreadModes.Color);
-            if (img.Empty()) continue;
+            if (img.Empty()) { skipped++; continue; }
             // 全帧必须走与运行时一致的 预处理→裁ROI 链路；直接 Predict 会把整屏压扁成模型输入，领域完全错位
             PassabilityResult result;
             if (img.Width >= designW && img.Height >= designH)
@@ -51,7 +53,10 @@ public static class AiEvaluator
                 result = sensor.Predict(img);
             latencies.Add(result.LatencyMs);
             confusion[Array.IndexOf(ClassNames, label), (int)result.Class]++;
+            evaluated++;
         }
+        if (evaluated == 0)
+            throw new InvalidDataException($"labels.csv 中的图片全部缺失或无法解码: {datasetDir}");
 
         var perClassF1 = new double[n];
         for (int c = 0; c < n; c++)
@@ -67,7 +72,7 @@ public static class AiEvaluator
 
         latencies.Sort();
         double p99 = latencies.Count > 0 ? latencies[(int)Math.Min(latencies.Count - 1, latencies.Count * 0.99)] : 0;
-        return new EvalReport(rows.Count, confusion, perClassF1, perClassF1.Average(), latencies.Average(), p99);
+        return new EvalReport(evaluated, skipped, confusion, perClassF1, perClassF1.Average(), latencies.Average(), p99);
     }
 
     /// <summary>控制台友好输出（aieval / 金标集门禁共用）。</summary>
@@ -83,6 +88,8 @@ public static class AiEvaluator
             var row = Enumerable.Range(0, ClassNames.Length).Select(j => r.Confusion[i, j].ToString().PadLeft(6));
             lines.Add($"  {ClassNames[i],-10} {string.Join(' ', row)}   F1={r.PerClassF1[i]:F3}");
         }
+        if (r.Skipped > 0)
+            lines.Add($"  ⚠️ {r.Skipped} 行标注对应的图片缺失/无法解码，已排除在样本量之外（清理 labels.csv 或补回图片）");
         return string.Join(Environment.NewLine, lines);
     }
 }

@@ -5,6 +5,7 @@
 """
 
 import argparse
+import _console  # noqa: F401  —— 控制台 UTF-8 护栏（GBK 终端打印 emoji 会崩）
 import random
 import time
 from collections import Counter
