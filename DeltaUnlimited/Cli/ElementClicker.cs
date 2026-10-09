@@ -17,15 +17,20 @@ public static class ElementClicker
         if (!table.Elements.TryGetValue(elementName, out var def))
             throw new ArgumentException($"元素表里没有 “{elementName}”");
 
-        CaptureService.RaiseWindow(hwnd);
+        // 提速：链路里每个点击前一次"置顶 + 抢焦点 + 450ms 等待"纯冗余——游戏在前台时不必做。
+        // 只有非前台（玩家切出去过/别的窗口盖住了）才需要置顶+抢焦点，否则点不到、截图还可能被遮挡。
+        bool alreadyFront = InputService.IsForeground(hwnd);
+        if (!alreadyFront)
+        {
+            CaptureService.RaiseWindow(hwnd);
+            Thread.Sleep(250);
+            InputService.EnsureForeground(hwnd); // 部分游戏非前台时忽略鼠标点击
+            Thread.Sleep(200);
+        }
         try
         {
             // P2-6：以下任意路径抛异常（OCR/模板/配置加载失败、窗口最小化、定位失败）都由 finally 还原窗口层级，
             // 防"游戏窗口永久置顶"卡住用户
-            Thread.Sleep(250);
-            InputService.EnsureForeground(hwnd); // 部分游戏非前台时忽略鼠标点击
-            Thread.Sleep(200);
-
             var rect = CaptureService.GetClientScreenRect(hwnd);
             if (rect is null)
                 throw new InvalidOperationException("点击前窗口不可用（最小化？）");
@@ -92,7 +97,7 @@ public static class ElementClicker
         }
         finally
         {
-            CaptureService.UnraiseWindow(hwnd);
+            if (!alreadyFront) CaptureService.UnraiseWindow(hwnd); // 没置顶过就不必还原（保持别人的窗口层级）
         }
     }
 
