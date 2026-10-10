@@ -5,6 +5,11 @@
   "px_per_90deg": 4500,
   "poll_interval_ms": 300,
   "poll_interval_note": "等待界面时的轮询间隔（ms）。2026-09-30 由 600 降到 300：等待循环已加'变更门'——先做 1/6 缩略图帧差（约 2ms），画面无变化就跳过整轮识别（Detect≈600-700ms），因此高频轮询不再昂贵；界面出现后的反应延迟随之降到 ~300ms 量级",
+  "session_limits": {
+    "max_minutes_per_day": 240,
+    "max_matches_per_day": 0,
+    "note": "自动化会话限额（风控红线，跑刀方案 §9）：默认每日累计 240 分钟（4 小时）后自动停止；max_matches_per_day=0 表示不限局数。用户可自行调整——风险自担。"
+  },
   "design_width": 1920,
   "design_height": 1080,
   "ocr_engine": "windows",

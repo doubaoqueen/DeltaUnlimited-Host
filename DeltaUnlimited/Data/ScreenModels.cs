@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace DeltaUnlimited.Data;
@@ -35,6 +36,16 @@ public sealed class ScreenDef
     /// 用于"空格继续"类通用弹层（仓库升级完成/广告/任务领取等），避免链路被非主线弹层卡死。</summary>
     [JsonPropertyName("dismiss")]
     public string? Dismiss { get; set; }
+
+    /// <summary>界面分组："lobby"（大厅/菜单，默认）或 "match"（对局内）。
+    /// 链路按组只扫本组界面：省一半 OCR；且"局内 unknown"的兜底语义与大厅不同——
+    /// 大厅 unknown 可按 Tab 回特勤处，局内按 Tab 是计分板，绝不能当兜底。</summary>
+    [JsonPropertyName("group")]
+    public string Group { get; set; } = "lobby";
+
+    /// <summary>未映射字段兜底收纳（防静默丢弃，评审 P3-8）。</summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? Extra { get; set; }
 }
 
 /// <summary>识别标记：type = template / ocr（后续扩展 color）。

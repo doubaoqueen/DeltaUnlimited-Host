@@ -1,4 +1,5 @@
 using DeltaUnlimited.Data;
+using DeltaUnlimited.Vision;
 using Xunit;
 
 namespace DU.Tests;
@@ -49,6 +50,39 @@ public class DataStoreTests
         var table = CreateStore().LoadScreens();
         Assert.True(table.Screens.ContainsKey("space_continue"));
         Assert.Equal("space", table.Screens["space_continue"].Dismiss);
+    }
+
+    [Fact]
+    public void ZeroDamPoints_NoPresetRouteTables()
+    {
+        // 跑刀方案 §1 强制约束：禁止预设路线/点位表。loot_points（搜刮点坐标表）已于 2026-09-30 删除；
+        // 这里钉住"数据里不得再出现 loot_points"，防止被顺手加回来。
+        var points = CreateStore().LoadZeroDamPoints();
+        Assert.NotNull(points.ExtractPoints);
+        Assert.True(points.Extra is null || !points.Extra.ContainsKey("loot_points"),
+            "zero_dam_points.json 不得再包含 loot_points（预设点位表已被跑刀方案废弃）");
+    }
+
+    [Fact]
+    public void Screens_DefaultGroupIsLobby_AndGroupFilterWorks()
+    {
+        // 分表约定：未标 group 的界面默认属 lobby 组（大厅/菜单）；局内界面将来标 "match"。
+        // 分组过滤用于局内链路只扫本组界面（省一半 OCR），且局内 unknown 的兜底与大厅不同。
+        var table = CreateStore().LoadScreens();
+        var lobby = table.Screens["lobby"];
+        Assert.Equal("lobby", lobby.Group);
+        Assert.True(ScreenDetector.InGroup(lobby, null));        // 不限组 → 全都要
+        Assert.True(ScreenDetector.InGroup(lobby, "lobby"));
+        Assert.False(ScreenDetector.InGroup(lobby, "match"));    // 局内链路不会扫到大厅界面
+    }
+
+    [Fact]
+    public void Runtime_LoadsSessionLimits_DefaultFourHours()
+    {
+        // 风控红线（跑刀方案 §9）：会话限额必须存在且默认 4 小时/日；用户可自定义、风险自担。
+        var limits = CreateStore().LoadRuntime().SessionLimits;
+        Assert.Equal(240, limits.MaxMinutesPerDay);
+        Assert.Equal(0, limits.MaxMatchesPerDay); // 0 = 不限局数
     }
 
     [Fact]

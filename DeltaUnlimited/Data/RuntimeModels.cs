@@ -43,6 +43,26 @@ public sealed class RuntimeConfig
     /// <summary>拟人化参数（缺失时使用默认值）。</summary>
     [JsonPropertyName("humanizer")]
     public HumanizerConfig? Humanizer { get; set; }
+
+    /// <summary>自动化会话限额（风控红线；缺失时用默认值 = 每日 4 小时）。</summary>
+    [JsonPropertyName("session_limits")]
+    public SessionLimits SessionLimits { get; set; } = new();
+}
+
+/// <summary>自动化会话限额（跑刀方案 §9 风控要求）：防"挂机一整天"这类最容易被风控、也最违反项目初衷的用法。
+/// 默认每日累计 4 小时；用户可自定义，风险自担。</summary>
+public sealed class SessionLimits
+{
+    /// <summary>每日累计自动化时长上限（分钟）。0 = 不限。</summary>
+    [JsonPropertyName("max_minutes_per_day")]
+    public int MaxMinutesPerDay { get; set; } = 240;
+
+    /// <summary>每日最多自动化局数。0 = 不限。</summary>
+    [JsonPropertyName("max_matches_per_day")]
+    public int MaxMatchesPerDay { get; set; }
+
+    [JsonPropertyName("note")]
+    public string? Note { get; set; }
 }
 
 /// <summary>拟人化参数：输入层所有随机范围的配置（调参不改代码）。</summary>

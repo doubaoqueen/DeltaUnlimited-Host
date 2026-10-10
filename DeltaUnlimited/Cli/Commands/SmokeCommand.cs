@@ -34,7 +34,7 @@ public static class SmokeCommand
         Console.WriteLine($"[operator_presets.json] 地图干员 {opPresets.MapOperators.Count} 条, 类型锚点 {opPresets.Layout.TypeLabels.Count} 个");
 
         var points = data.LoadZeroDamPoints();
-        Console.WriteLine($"[zero_dam_points.json] 撤离点 {points.ExtractPoints.Count}, 搜刮点 {points.LootPoints.Count}");
+        Console.WriteLine($"[zero_dam_points.json] 撤离点 {points.ExtractPoints.Count}（仅元数据；loot_points 已按跑刀方案废弃）");
 
         var wf = data.LoadWorkflow("demo_smoke.json");
         Console.WriteLine($"[demo_smoke.json] '{wf.Name}': {wf.Nodes.Count} 节点, {wf.Edges.Count} 边");

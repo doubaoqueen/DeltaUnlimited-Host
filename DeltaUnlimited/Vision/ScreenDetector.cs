@@ -22,10 +22,15 @@ public static class ScreenDetector
 
     public sealed record Candidate(string Name, double Confidence, bool Matched, int MarkerHits);
 
+    /// <summary>界面是否属于指定分组（纯函数，可单测）。group 为空 = 不限组（保持旧行为）。</summary>
+    public static bool InGroup(ScreenDef def, string? group)
+        => string.IsNullOrEmpty(group) || (def.Group ?? "lobby").Equals(group, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>逐界面扫描所有标记，返回按置信度降序的候选（含未命中的），用于校准阈值与诊断。
     /// 性能：单次扫描内同 region 的 OCR 词表缓存复用（全帧只识别一次、共用区域只识别一次），
-    /// 避免"每个标记各自全帧 OCR"导致单次 Detect 十几秒。</summary>
-    public static IReadOnlyList<Candidate> Scan(Mat frame, ScreenTable table, string repoRoot)
+    /// 避免"每个标记各自全帧 OCR"导致单次 Detect 十几秒。
+    /// <paramref name="group"/> 非空时只扫该分组界面（大厅/局内分表，省一半 OCR）。</summary>
+    public static IReadOnlyList<Candidate> Scan(Mat frame, ScreenTable table, string repoRoot, string? group = null)
     {
         var list = new List<Candidate>();
         var wordCache = new Dictionary<string, IReadOnlyList<OcrWord>>();
@@ -44,6 +49,7 @@ public static class ScreenDetector
         {
             if (def.Enabled == false) continue; // 显式禁用
             if (def.Markers.Count == 0) continue; // 无标记的界面不可检测（等待补标记）
+            if (!InGroup(def, group)) continue;   // 分组过滤（局内链路只扫 match 组）
 
             bool hit = false;
             double best = 0;
@@ -95,13 +101,14 @@ public static class ScreenDetector
     public static double LastDetectMs { get; private set; }
 
     /// <summary>检测当前界面；无任何屏幕命中返回 null（未知界面）。
-    /// 多界面同时命中时按（置信度, 命中标记数）取最优，其余界面放入 Alternatives 供调用方告警。</summary>
-    public static ScreenGuess? Detect(Mat frame, ScreenTable table, string repoRoot)
+    /// 多界面同时命中时按（置信度, 命中标记数）取最优，其余界面放入 Alternatives 供调用方告警。
+    /// <paramref name="group"/> 非空时只在该分组内识别（lobby = 大厅/菜单；match = 对局内）。</summary>
+    public static ScreenGuess? Detect(Mat frame, ScreenTable table, string repoRoot, string? group = null)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
         try
         {
-            var matched = Scan(frame, table, repoRoot).Where(c => c.Matched).ToList();
+            var matched = Scan(frame, table, repoRoot, group).Where(c => c.Matched).ToList();
             if (matched.Count == 0) return null;
 
             var best = matched.OrderByDescending(c => c.Confidence).ThenByDescending(c => c.MarkerHits).First();
