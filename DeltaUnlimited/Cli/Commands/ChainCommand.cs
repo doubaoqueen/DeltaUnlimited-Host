@@ -5,6 +5,7 @@ using DeltaUnlimited.Input;
 using DeltaUnlimited.Overlay;
 using DeltaUnlimited.Vision;
 using DeltaUnlimited.Vision.Ocr;
+using DeltaUnlimited.Vision.Servo;
 using OpenCvSharp;
 
 namespace DeltaUnlimited.Cli.Commands;
@@ -23,6 +24,7 @@ public static class ChainCommand
         var runtime = data.LoadRuntime();
         var elements = data.LoadElements();
         var screens = data.LoadScreens();
+        var ops = data.LoadGameOps();
         string winKeyword = runtime.WindowKeyword;
 
         ValidateChain(chain, elements, screens, repoRoot); // 加载期交叉校验：启动即报错，而非运行时盲等
@@ -119,6 +121,41 @@ public static class ChainCommand
 
                 case "wait":
                     break; // 统一在步骤末尾按 wait_ms 等待
+
+                case "follow_marker":
+                {
+                    // K1 撤离跟随：同步阻塞跑一轮伺服，结局走 branches（success/timeout/stopped/stuck/danger/error）
+                    // 或 default 兜底；只有 Success 落到下一步。点击类动作不在这里——伺服只移动（ServoAction 无点击字段）。
+                    string tpl = s.Template ?? throw new InvalidDataException("follow_marker 步骤缺少 template 字段");
+                    int servoTimeout = s.TimeoutMs ?? 180_000;
+                    var actor = new KeyboardMouseActor(
+                        ops.KeyMap.GetValueOrDefault("move_forward", "w"),
+                        ops.KeyMap.GetValueOrDefault("sprint", "shift"));
+                    var perceiver = new TemplateMarkerPerceiver(
+                        () => CaptureService.CaptureWindowMat(winKeyword),
+                        Path.Combine(repoRoot, tpl),
+                        runtime.DesignWidth, runtime.DesignHeight);
+                    Console.WriteLine($"  🧭 跟随导航标记（模板 {tpl}，最长 {servoTimeout}ms，8Hz）...");
+                    var servo = FollowMarkerOp.Run(perceiver, actor, runtime.Servo,
+                        new ServoLoop.Options { TimeoutMs = servoTimeout },
+                        new Random(), stopped: () => CommandUtil.StopRequested);
+                    Logger.Info($"伺服结束: {servo.Outcome} {servo.Detail}（{servo.ElapsedMs:F0}ms）");
+                    Console.WriteLine($"  🏁 伺服结局 {servo.Outcome}: {servo.Detail}");
+
+                    string outcomeKey = servo.Outcome.ToString().ToLowerInvariant();
+                    if (s.Branches is not null && s.Branches.TryGetValue(outcomeKey, out string? tgt) && !string.IsNullOrEmpty(tgt))
+                    {
+                        i = FindStep(tgt);
+                        continue;
+                    }
+                    if (servo.Ok) break;                 // 成功 → 顺序落到下一步
+                    if (!string.IsNullOrEmpty(s.Default))
+                    {
+                        i = FindStep(s.Default);
+                        continue;
+                    }
+                    throw new InvalidOperationException($"伺服结局 {servo.Outcome}（{servo.Detail}）无对应分支且未配置 default，链路中止");
+                }
 
                 case "wait_screen":
                 {
@@ -561,6 +598,27 @@ public static class ChainCommand
                         errors.Add($"步骤{idx}: switch_screen 的 max_loops 必须 ≥1");
                     break;
 
+                case "follow_marker":
+                    if (string.IsNullOrEmpty(s.Template))
+                        errors.Add($"步骤{idx}: follow_marker 缺少 template（导航标记模板）");
+                    else if (!File.Exists(Path.Combine(repoRoot, s.Template)))
+                        errors.Add($"步骤{idx}: 模板文件不存在: {s.Template}");
+                    if (s.Branches is { Count: > 0 })
+                    {
+                        var validOutcomes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                            { "success", "timeout", "stopped", "stuck", "danger", "error" };
+                        foreach (var (o, tgt) in s.Branches)
+                        {
+                            if (!validOutcomes.Contains(o))
+                                errors.Add($"步骤{idx}: follow_marker 分支 “{o}” 不是合法伺服结局（success/timeout/stopped/stuck/danger/error）");
+                            if (string.IsNullOrEmpty(tgt) || chain.Steps.All(x => x.Id != tgt))
+                                errors.Add($"步骤{idx}: follow_marker 分支 “{o}” 的跳转目标 “{tgt}” 不存在");
+                        }
+                    }
+                    if (!string.IsNullOrEmpty(s.Default) && chain.Steps.All(x => x.Id != s.Default))
+                        errors.Add($"步骤{idx}: follow_marker 的 default 兜底目标不存在");
+                    break;
+
                 case "pick_operator":
                     break; // 无必填字段（读 operator_presets 配置，未配置则跳过）
 
@@ -643,8 +701,12 @@ public static class ChainCommand
                 case "if_template":
                 case "if_ocr":
                 case "wait_screen":     // 达成落下一步；超时软跳转
+                case "follow_marker":   // Success 落下一步；其余结局走 branches/default
                     Visit(i + 1);
+                    if (s.Branches != null)
+                        foreach (var t in s.Branches.Values) Visit(IdxOf(t));
                     Visit(IdxOf(s.JumpTo));
+                    Visit(IdxOf(s.Default));
                     break;
                 default: // key/wait/pause/detect/mark_unknown/pick_operator：纯顺序执行
                     Visit(i + 1);
