@@ -7,7 +7,8 @@ P0 实测结论（2026-10-11）：单图整帧直问的框不合格——小图�
 v2 对策（两步缩放）：
   第 1 步 · 粗定位：整帧只框"大区域"（小地图面板/大地图面板）和各类目标的宽松粗框
            （宁大勿小、目标必须完全在框内）；
-  第 2 步 · 细框：把每个粗框从**原图**裁出（加 25% 边距），放大到 1280 宽再问一次，
+  第 2 步 · 细框：把每个粗框从**原图**裁出（加 25% 边距），放大再问一次（宽≤1280、
+           高≤2048、面积≤100 万 px 三约束，防窄高裁图爆上下文），
            "框必须紧贴目标外缘 + 显式排除带数字队友图标"；细框再映射回原图坐标。
 坐标系换算（每层都要）：粗框 sent→orig（map_bbox）→ 裁图（crop_rect）→ 细框
   crop-sent→orig（map_box_to_orig）→ clamp → 退化框过滤。三层换算均有离线 selftest 钉住。
@@ -28,6 +29,7 @@ import csv
 import io
 import json
 import random
+import urllib.error
 import urllib.request
 from datetime import datetime
 from pathlib import Path
@@ -38,7 +40,12 @@ ROOT = Path(__file__).resolve().parents[1]          # ai-training/
 REC = ROOT / "datasets" / "record"
 REPO = ROOT.parent
 PROMPT_V = "p0-v2"                                   # 提示词版本：改 PROMPT 必须升版本
-MAX_W = 1280                                         # 送模型前缩/放到 ≤1280 宽
+MAX_W = 1280                                         # 送图最大宽
+MAX_H = 2048                                         # 送图最大高（防超窄超高裁图）
+MAX_AREA = 1_000_000                                 # 送图最大面积 px²（≈1280×720 整帧的已知安全量）
+# 为什么限面积：2026-10-11 踩坑——296×462 的窄高裁图按"宽 1280"放大成 1280×1998，
+# 图片 token 2764 超过服务端 max-model-len 2048，每帧 400 报错。面积锁死 1M px 后
+# token 数与整帧同级（~900），永不再爆。此三约束与方案文档 §4 一致。
 PAD = 0.25                                           # 裁图边距（粗框外扩比例）
 MIN_BOX = 8                                          # 最终框最小边长（原图像素），防退化框
 
@@ -110,10 +117,14 @@ bbox 是**图1 上的像素整数坐标**，范围 x∈[0,{sent_w}]、y∈[0,{se
 
 # ---------- 图像与坐标 ----------
 
-def to_b64(img: Image.Image, max_w: int) -> tuple[str, int, int]:
-    """缩放编码；返回 (b64, w, h)。小于 max_w 的小图会**放大**到 max_w（细框关键）。"""
-    if img.width != max_w:
-        img = img.resize((max_w, round(img.height * max_w / img.width)), Image.LANCZOS)
+def to_b64(img: Image.Image, max_w: int = MAX_W, max_h: int = MAX_H,
+           max_area: int = MAX_AREA) -> tuple[str, int, int]:
+    """缩放编码；返回 (b64, w, h)。三约束：宽≤max_w、高≤max_h、面积≤max_area。
+    小图会放大（细框关键），但放大后的面积不能超过整帧已知安全量——否则爆上下文（见 MAX_AREA 注释）。"""
+    scale = min(max_w / img.width, max_h / img.height,
+                (max_area / (img.width * img.height)) ** 0.5)
+    if scale != 1:
+        img = img.resize((round(img.width * scale), round(img.height * scale)), Image.LANCZOS)
     buf = io.BytesIO()
     img.convert("RGB").save(buf, "JPEG", quality=90)
     return ("data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode(),
@@ -135,8 +146,16 @@ def ask(base_url: str, model: str, prompt: str, b64: str, timeout: int = 240) ->
         data=json.dumps(body).encode(),
         headers={"Content-Type": "application/json"},
     )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read())["choices"][0]["message"]["content"]
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read())["choices"][0]["message"]["content"]
+    except urllib.error.HTTPError as e:
+        # 400/500 时把 vLLM 的错误详情带出来（如 Input length exceeds...），别只留一句 Bad Request
+        try:
+            detail = e.read().decode("utf-8", "ignore")[:300]
+        except Exception:
+            detail = ""
+        raise RuntimeError(f"HTTP {e.code}: {detail}") from e
 
 
 def _boxes(raw, allowed: set) -> list[dict]:
@@ -427,7 +446,15 @@ def selftest():
     assert parse_pass2('{"objects": [{"cls":"extract","bbox":[5,4,3,2]}]}', {"extract"}) == []
     bad_cls = parse_pass2('{"objects": [{"cls":"enemy","bbox":[1,2,3,4]}]}', {"extract"})
     assert bad_cls == [], bad_cls
-    print("✅ selftest 通过：三层坐标换算 + 解析容错")
+    # 5) 缩放三约束（宽/高/面积）：窄高裁图不再爆上下文（2026-10-11 踩坑回归测试）
+    tall = Image.new("RGB", (296, 462))
+    _, w5, h5 = to_b64(tall)
+    assert w5 <= MAX_W and h5 <= MAX_H and w5 * h5 <= MAX_AREA * 1.02, (w5, h5)
+    assert abs(w5 / h5 - 296 / 462) < 0.02, (w5, h5)
+    full = Image.new("RGB", (1920, 1080))
+    _, w6, h6 = to_b64(full)
+    assert (w6, h6) == (1280, 720), (w6, h6)
+    print("✅ selftest 通过：三层坐标换算 + 解析容错 + 缩放三约束")
 
 
 def main():
