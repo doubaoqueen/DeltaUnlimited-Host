@@ -14,6 +14,14 @@ public sealed class ItemCatalogTable
 
     [JsonPropertyName("items")]
     public List<ItemCatalogEntry> Items { get; set; } = new();
+
+    /// <summary>局内拾取的最低品质档位（白=1 绿=2 蓝=3 紫=4 金=5 红=6；低于此档不捡）。默认 2=绿。</summary>
+    [JsonPropertyName("min_tier_to_pick")]
+    public int MinTierToPick { get; set; } = 2;
+
+    /// <summary>撤离时间红线（剩余分钟 ≤ 此值必须开始撤离；0=禁用时间红线）。</summary>
+    [JsonPropertyName("extract_deadline_min")]
+    public int ExtractDeadlineMin { get; set; }
 }
 
 /// <summary>单条物品定义（草案字段，正式启用前可改）。</summary>

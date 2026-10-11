@@ -1,0 +1,10 @@
+﻿跑刀 S0 续工完成（主力自行施工，用户拍板）：190 测试全绿
+
+- EconomyAgent 纯函数（ShouldPick/ShouldDiscard/TimeToExtract/TierValue/MatchItem）
+  + item_catalog.json 增 min_tier_to_pick=2 / extract_deadline_min=0
+- 感知信号框架：SignalSpec 五要素 + RatioDetector（阈值随机范围+连续N帧确认+触发后重取样）
+  + LootGlow 金/紫双通道 + 默认占位规格（待 K0 标定）
+- runtime.json 增 servo 段（全部随机范围）+ ServoConfig JsonPropertyName 接入
+- fixtures 管线：FixtureFrames（RunIfAvailable 素材缺席跳过）+ tests/fixtures 随构建复制
+- FollowMarkerOp 薄壳 + KeyboardMouseActor（键位注入，状态切换才按/放键，任何结局兜底松键）
+- 开工令-助手B 撤单留档；协作分工.md 同步

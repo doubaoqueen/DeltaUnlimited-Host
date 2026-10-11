@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using DeltaUnlimited.Vision.Servo;
 
 namespace DeltaUnlimited.Data;
 
@@ -47,6 +48,10 @@ public sealed class RuntimeConfig
     /// <summary>自动化会话限额（风控红线；缺失时用默认值 = 每日 4 小时）。</summary>
     [JsonPropertyName("session_limits")]
     public SessionLimits SessionLimits { get; set; } = new();
+
+    /// <summary>伺服控制参数（跑刀局内 follow_marker 用；全部随机范围，铁律）。缺失时用安全默认值。</summary>
+    [JsonPropertyName("servo")]
+    public ServoConfig Servo { get; set; } = new();
 }
 
 /// <summary>自动化会话限额（跑刀方案 §9 风控要求）：防"挂机一整天"这类最容易被风控、也最违反项目初衷的用法。

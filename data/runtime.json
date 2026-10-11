@@ -10,6 +10,17 @@
     "max_matches_per_day": 0,
     "note": "自动化会话限额（风控红线，跑刀方案 §9）：默认每日累计 240 分钟（4 小时）后自动停止；max_matches_per_day=0 表示不限局数。用户可自行调整——风险自担。"
   },
+  "servo": {
+    "turn_gain_min": 0.35,
+    "turn_gain_max": 0.55,
+    "deadzone_px": 40,
+    "max_turn_per_cycle": 260,
+    "turn_jitter_px": 12,
+    "arrive_meters": 12,
+    "sprint_until_meters": 60,
+    "search_forward_ratio": 0.6,
+    "note": "局内伺服（follow_marker 撤离跟随）控制参数——全部随机范围（铁律），K0 标定后校准：转向增益/死区/钳制按 px_per_90deg 与标记偏移实测调；arrive_meters 按 K0 的距离数字可读性定（可读走数字阈值，不可读走模板尺寸阈值，见 docs/跑刀工程提案.md §3/§9-4）"
+  },
   "design_width": 1920,
   "design_height": 1080,
   "ocr_engine": "windows",

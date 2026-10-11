@@ -17,4 +17,9 @@
     <ProjectReference Include="..\..\DeltaUnlimited\DeltaUnlimited.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- fixtures 帧回归素材：本地截图随构建复制到输出目录（源目录 tests/fixtures 不进 git） -->
+    <None Include="..\fixtures\**" CopyToOutputDirectory="PreserveNewest" LinkBase="fixtures" />
+  </ItemGroup>
+
 </Project>

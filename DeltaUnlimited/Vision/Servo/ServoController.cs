@@ -1,30 +1,32 @@
 namespace DeltaUnlimited.Vision.Servo;
 
+using System.Text.Json.Serialization;
+
 /// <summary>伺服控制参数（全部随机范围——项目铁律：宁可慢，不可机械）。
-/// 参数最终由 data/runtime.json 的 servo 段提供；本类给出安全默认值。</summary>
+/// 参数由 data/runtime.json 的 servo 段提供（RuntimeConfig.Servo）；本类给出安全默认值。</summary>
 public sealed class ServoConfig
 {
     /// <summary>比例控制增益范围（像素偏差 → 相对移动像素）。</summary>
-    public double TurnGainMin { get; set; } = 0.35;
-    public double TurnGainMax { get; set; } = 0.55;
+    [JsonPropertyName("turn_gain_min")] public double TurnGainMin { get; set; } = 0.35;
+    [JsonPropertyName("turn_gain_max")] public double TurnGainMax { get; set; } = 0.55;
 
     /// <summary>死区（px）：偏差在死区内不转向，避免抖动。</summary>
-    public int DeadzonePx { get; set; } = 40;
+    [JsonPropertyName("deadzone_px")] public int DeadzonePx { get; set; } = 40;
 
     /// <summary>每周期最大转向量（px，硬钳制防失控）。</summary>
-    public int MaxTurnPerCycle { get; set; } = 260;
+    [JsonPropertyName("max_turn_per_cycle")] public int MaxTurnPerCycle { get; set; } = 260;
 
     /// <summary>转向随机抖动（px，叠加在计算量上）。</summary>
-    public int TurnJitterPx { get; set; } = 12;
+    [JsonPropertyName("turn_jitter_px")] public int TurnJitterPx { get; set; } = 12;
 
     /// <summary>到达判定距离（米）：≤ 此值视为到达标记点。</summary>
-    public double ArriveMeters { get; set; } = 12;
+    [JsonPropertyName("arrive_meters")] public double ArriveMeters { get; set; } = 12;
 
     /// <summary>减速距离（米）：进入该距离后不再冲刺。</summary>
-    public double SprintUntilMeters { get; set; } = 60;
+    [JsonPropertyName("sprint_until_meters")] public double SprintUntilMeters { get; set; } = 60;
 
     /// <summary>标记不可见时的前进时长占比（0-1）：不盲目狂奔，走走停停等标记重现。</summary>
-    public double SearchForwardRatio { get; set; } = 0.6;
+    [JsonPropertyName("search_forward_ratio")] public double SearchForwardRatio { get; set; } = 0.6;
 }
 
 /// <summary>伺服控制器（**纯函数**，无 IO、无输入注入，可单测）：

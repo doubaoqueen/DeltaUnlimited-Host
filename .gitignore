@@ -365,6 +365,7 @@ FodyWeavers.xsd
 screenshots/
 
 tests/fixtures/
+!tests/fixtures/README.md
 
 # AI 训练数据与训练产物（图像/checkpoint 不入库；manifest.csv、代码入库）
 ai-training/datasets/passability/images/
