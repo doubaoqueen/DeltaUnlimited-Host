@@ -63,7 +63,7 @@
 | 详细说明 | 初筛字段含义/注意事项/故障排查见 `docs/AI初筛操作手册.md`；训练方案见 `docs/AI训练侦查报告.md` |
 
 ```bash
-# vLLM 服务启动（懒人一行版，任意 Windows 终端可执行；WSL 新手分步版见 docs/AI初筛操作手册.md §1）
+# vLLM 服务启动（懒人一行版，⚠️ 仅 PowerShell 可用：cmd 不认单引号会报 unexpected EOF；cmd 请先输 wsl 进入 Linux 走分步版，见 docs/AI初筛操作手册.md §1.2）
 wsl -e bash -c 'export HF_HUB_CACHE=/mnt/d/hf-cache HF_ENDPOINT=https://hf-mirror.com CC=gcc VLLM_USE_FLASHINFER_SAMPLER=0 VLLM_FLASHINFER_FORCE_TENSOR_REGISTRY=1; source ~/vllm-env/bin/activate; exec vllm serve /mnt/d/hf-cache/models--cyankiwi--Qwen3-VL-8B-Instruct-AWQ-4bit/snapshots/87196f7771efdd7022a8d8f094ac6e063bf87f5c --served-model-name qwen3vl-8b --max-model-len 2048 --gpu-memory-utilization 0.88 --enforce-eager --limit-mm-per-prompt "{\"images\": 1}" --port 8000'
 ```
 

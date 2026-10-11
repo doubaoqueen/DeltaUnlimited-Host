@@ -32,7 +32,7 @@ vllm serve /mnt/d/hf-cache/models--cyankiwi--Qwen3-VL-8B-Instruct-AWQ-4bit/snaps
 3. **这个窗口别关！** 服务就活在这个窗口里，日志实时滚动——**看进度/判断启动到哪了就是看这个窗口**。可以最小化，但用初筛期间它必须开着（关窗口 = 服务停止）。第一次 export 的几个环境变量只在当前窗口生效，所以每次重启都要完整贴三条。
 4. 启动需 **3-5 分钟**（从 D 盘加载权重 + 编译内核）。**就绪标志**：日志末尾出现 Uvicorn 路由表和 `GET /v1/models 200` 字样。
 
-懒人版（不想手动进 WSL：在任意 Windows 终端整行执行，效果完全等同，窗口同样保持打开）：
+懒人版（**仅 PowerShell 终端**——在 Windows 终端窗口里整行执行，效果完全等同，窗口同样保持打开。⚠️ **cmd 不认单引号**，会报 `unexpected EOF while looking for matching`，cmd 用户请走上面分步版：先输 `wsl` 回车进入 Linux，再贴三条命令）：
 
 ```bash
 wsl -e bash -c 'export HF_HUB_CACHE=/mnt/d/hf-cache HF_ENDPOINT=https://hf-mirror.com CC=gcc VLLM_USE_FLASHINFER_SAMPLER=0 VLLM_FLASHINFER_FORCE_TENSOR_REGISTRY=1; source ~/vllm-env/bin/activate; exec vllm serve /mnt/d/hf-cache/models--cyankiwi--Qwen3-VL-8B-Instruct-AWQ-4bit/snapshots/87196f7771efdd7022a8d8f094ac6e063bf87f5c --served-model-name qwen3vl-8b --max-model-len 2048 --gpu-memory-utilization 0.88 --enforce-eager --limit-mm-per-prompt "{\"images\": 1}" --port 8000'
