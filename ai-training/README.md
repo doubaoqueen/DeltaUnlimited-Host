@@ -44,6 +44,9 @@
 ⑧ 链路自检：python src/smoke_test.py                （伪造小数据集跑通 train→export→evaluate，不依赖真实素材）
 ⑨ VLM 初筛（可选，需 vLLM 服务）：python src/prescreen.py → record/prescreen.csv
    （自动分流+环境元数据+金帧池；操作手册与红线见 docs/AI初筛操作手册.md；VLM 判断不是训练标签）
+⑩ VLM 预标注 P0 试跑（可选，需 vLLM 服务）：python src/ground.py --limit 40
+   （目标检测出框能力试跑：金帧优先抽样→出框+预览图+统计，产物 runs/p0_probe_*/
+    离线 --selftest/--dry-run 不需要服务；方案与后续 P1-P3 见 docs/VLM预标注流水线方案.md）
 ```
 
 ## 结果查看（怎么知道干到哪了）
