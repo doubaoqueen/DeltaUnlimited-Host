@@ -1,4 +1,4 @@
-# Cli/ —— 命令行工具箱（功能介绍 + 二次使用手册）
+﻿# Cli/ —— 命令行工具箱（功能介绍 + 二次使用手册）
 
 > 定位：DeltaUnlimited 的全部 CLI 动词都在这里实现并注册（`Program.cs` 路由 → `Commands/*.cs`）。其中相当一部分**可以脱离跑刀流程单独复用**——本文既是功能介绍，也是日后二次使用的操作手册。
 > 运行方式：`cd DeltaUnlimited` 后 `dotnet run -- <命令>`；或仓库根 `dotnet run --project DeltaUnlimited\DeltaUnlimited.csproj -- <命令>`。
@@ -13,6 +13,7 @@
 | `capture [标题关键字] [文件名]` | 抓取指定窗口画面 | `screenshots/captured/`——任何"我要看它现在长什么样"的场景 |
 | `crop <x> <y> <w> <h> <源图> [输出] [缩放]` | 从截图裁小图（可按设计分辨率换算） | 制作 `assets/templates/` 识别模板的标准流程 |
 | `tplprobe <截图> <模板> [阈值]` | 模板匹配诊断 | 输出置信度与位置——调模板阈值必用 |
+| `localize <截图> [--map 底图] [--scales 列表] [--minscore 分] [--topk N]` | 小地图定位诊断（小地图↔官方底图地形匹配，输出地图坐标+候选） | K1 撤离/路线导航的定位核心；方法见 `docs/小地图定位P0验证.md` |
 | `ocr <截图> [--region x y w h] [关键词...]` | OCR 诊断 | 输出全部识别词 + 关键词命中——调 OCR 标记必用 |
 | `annotate <元素名> [截图]` | 元素识别静态验证 | 按 `elements.json` 策略（coord/template）画框输出 |
 | `windows` | 列出全部可见顶层窗口 | 查窗口标题关键字（配 `--win` 参数） |
@@ -60,3 +61,4 @@
 ## 依赖的底层库（同仓库，本文不展开）
 
 `Capture/`（BitBlt 窗口截屏 + DPI 换算）、`Vision/`（模板匹配 / OCR 封装 / 帧差 / AI 推理 OnnxRunner）、`Input/`（SendInput 拟人键鼠）、`Overlay/`（悬浮面板）、`Data/`（全部 JSON 配置的读写模型）。改这些 = 改所有命令的公共行为，动前先读 `docs/模块说明.md`。
+

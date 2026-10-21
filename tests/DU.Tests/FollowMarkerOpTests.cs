@@ -45,7 +45,7 @@ public class FollowMarkerOpTests
         var actor = new FakeActor();
         var r = FollowMarkerOp.Run(
             new FakePerceiver(new ServoFrame(true, 0, 8, 20, false)),
-            actor, Cfg(), FastOpts(), new Random(1));
+            actor, Cfg(), FastOpts(), new Random(1), stopped: () => false);
 
         Assert.Equal(ServoOutcome.Success, r.Outcome);
         Assert.Equal(1, actor.ReleaseCount);                 // 成功也要松键
@@ -72,7 +72,7 @@ public class FollowMarkerOpTests
         var actor = new FakeActor();
         var r = FollowMarkerOp.Run(
             new ThrowingPerceiver(),
-            actor, Cfg(), FastOpts(), new Random(1));
+            actor, Cfg(), FastOpts(), new Random(1), stopped: () => false);
 
         Assert.Equal(ServoOutcome.Error, r.Outcome);
         Assert.Equal(1, actor.ReleaseCount);                 // 异常路径也必须松键（提案 §3 输出兜底）
@@ -84,7 +84,7 @@ public class FollowMarkerOpTests
         var actor = new FakeActor();
         var r = FollowMarkerOp.Run(
             new FakePerceiver(new ServoFrame(true, 100, 200, 0.5, false)),  // 画面持续低变化
-            actor, Cfg(), FastOpts(), new Random(1));
+            actor, Cfg(), FastOpts(), new Random(1), stopped: () => false);
 
         Assert.Equal(ServoOutcome.Stuck, r.Outcome);
         Assert.Equal(1, actor.ReleaseCount);
@@ -96,7 +96,7 @@ public class FollowMarkerOpTests
         var actor = new FakeActor();
         var r = FollowMarkerOp.Run(
             new FakePerceiver(new ServoFrame(true, 0, 200, 20, false)),
-            actor, Cfg(), FastOpts() with { TimeoutMs = 5 }, new Random(1));
+            actor, Cfg(), FastOpts() with { TimeoutMs = 5 }, new Random(1), stopped: () => false);
 
         Assert.Equal(ServoOutcome.Timeout, r.Outcome);
         Assert.Equal(1, actor.ReleaseCount);
@@ -110,7 +110,7 @@ public class FollowMarkerOpTests
         var actor = new FakeActor();
         FollowMarkerOp.Run(
             new FakePerceiver(new ServoFrame(true, 100, 200, 20, false)),
-            actor, Cfg(), FastOpts(), new Random(1));
+            actor, Cfg(), FastOpts(), new Random(1), stopped: () => false);
 
         foreach (var a in actor.Performed)
         {
@@ -119,3 +119,4 @@ public class FollowMarkerOpTests
         }
     }
 }
+
