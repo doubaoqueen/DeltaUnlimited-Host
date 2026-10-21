@@ -40,6 +40,14 @@ public static class LocalizeCommand
         var runtime = new DataStore(repoRoot).LoadRuntime();
         using var norm = FrameTools.Normalize(img, runtime.DesignWidth, runtime.DesignHeight);
 
+        // HUD 状态门：背包/地图/结算等全屏 UI 下没有小地图，先挡掉（2026-10-21 实测：Tab 背包被误当小地图）
+        var screens = new DataStore(repoRoot).LoadScreens();
+        if (!HudStateGate.IsNormalHud(norm, screens, repoRoot, out string? uiScreen))
+        {
+            Console.WriteLine($"⚠ 该帧为对局内 UI 界面（{uiScreen}），没有小地图，跳过定位。");
+            return;
+        }
+
         var cfg = new LocalizerConfig { TopK = Math.Max(1, topk) };
         if (mapRel is not null) cfg.MapImage = mapRel;
         if (scales is { Length: > 0 }) cfg.ScalesPx = scales;

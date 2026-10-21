@@ -50,6 +50,7 @@ public static class LocalizeTrackCommand
         if (scales is { Length: > 0 }) cfg.ScalesPx = scales;
 
         var runtime = new DataStore(repoRoot).LoadRuntime();
+        var screens = new DataStore(repoRoot).LoadScreens();
         using var loc = new MinimapLocalizer(cfg, repoRoot);
         var track = new LocalizerTrack(new LocalizerTrack.Options { MaxSpeedPxPerSec = maxSpeed });
 
@@ -57,7 +58,7 @@ public static class LocalizeTrackCommand
         Directory.CreateDirectory(outDir);
         string outCsv = Path.Combine(outDir,
             $"localizetrack_{from.Replace(":", "").Replace(" ", "_")}_{to.Replace(":", "").Replace(" ", "_")}.csv");
-        int accepted = 0, held = 0, total = 0;
+        int accepted = 0, held = 0, total = 0, uiSkipped = 0;
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
         using (var w = new StreamWriter(outCsv))
@@ -74,6 +75,17 @@ public static class LocalizeTrackCommand
                 using var img = Cv2.ImRead(path, ImreadModes.Color);
                 if (img.Empty()) continue;
                 using var norm = FrameTools.Normalize(img, runtime.DesignWidth, runtime.DesignHeight);
+
+                // HUD 状态门：背包/地图/结算等全屏 UI 下没有小地图（2026-10-21 实测：Tab 背包被误当小地图）
+                if (!HudStateGate.IsNormalHud(norm, screens, repoRoot, out string? uiScreen))
+                {
+                    uiSkipped++;
+                    held++;
+                    var holdPos = track.Last;
+                    w.WriteLine($"\"{created}\",0,,,,,UI 界面（{uiScreen}）无小地图，跳过");
+                    continue;
+                }
+
                 var raw = loc.Localize(norm);
                 long nowMs = new DateTimeOffset(DateTime.Parse(created)).ToUnixTimeMilliseconds();
                 var res = track.Accept(raw, nowMs);
@@ -89,9 +101,11 @@ public static class LocalizeTrackCommand
         }
 
         sw.Stop();
-        Console.WriteLine($"\n轨迹完成：{total} 帧 | 接受 {accepted} | 沿用 {held} | 耗时 {sw.Elapsed.TotalSeconds:F1}s（{sw.Elapsed.TotalMilliseconds / Math.Max(1, total):F0}ms/帧）");
+        Console.WriteLine($"\n轨迹完成：{total} 帧 | 接受 {accepted} | 沿用 {held}（其中 UI 界面跳过 {uiSkipped}）| 耗时 {sw.Elapsed.TotalSeconds:F1}s（{sw.Elapsed.TotalMilliseconds / Math.Max(1, total):F0}ms/帧）");
         Console.WriteLine($"CSV: {outCsv}");
-        if (held > 0)
-            Console.WriteLine($"提示：{held} 帧被判超速（UI 遮挡/重复地形误定位）——这正是运动学过滤在起作用");
+        if (held - uiSkipped > 0)
+            Console.WriteLine($"提示：{held - uiSkipped} 帧被判超速（重复地形误定位/UI 遮挡漏网）——运动学过滤在起作用");
+        if (uiSkipped > 0)
+            Console.WriteLine($"提示：{uiSkipped} 帧因处于对局内 UI（背包/地图/结算）被跳过——HUD 状态门在起作用");
     }
 }

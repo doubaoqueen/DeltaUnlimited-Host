@@ -1,3 +1,4 @@
+using DeltaUnlimited.Data;
 using DeltaUnlimited.Vision.Localization;
 using OpenCvSharp;
 using Xunit;
@@ -151,5 +152,25 @@ public class LocalizerTests
             // verdict == "bad"：当前已知会误报（0.746），此处不断言，作为问题记录（见 docs §4）
         }
         Assert.True(goodTotal == 0 || goodHit == goodTotal);
+    }
+
+    [Fact]
+    public void Fixture_BackpackFrame_IsGatedByHudStateGate()
+    {
+        // 2026-10-21 实测：背包（Tab）全屏时左上角不是小地图 —— 定位前必须被 HUD 状态门挡下
+        string dir = Path.Combine(FixtureFrames.Dir, "localizer");
+        string framePath = Path.Combine(dir, "full_20261012_003431_486.jpg");
+        string mapPath = Path.Combine(dir, "zero_dam_z4.png");
+        if (!File.Exists(framePath) || !File.Exists(mapPath)) return;
+
+        try { DeltaUnlimited.Vision.Ocr.Ocr.Initialize(); }
+        catch { return; } // 测试宿主不可用 OCR 时跳过
+
+        var screens = new DataStore(DataStore.FindRoot()).LoadScreens();
+        using var frame = Cv2.ImRead(framePath, ImreadModes.Color);
+        using var norm = DeltaUnlimited.Vision.FrameTools.Normalize(frame, 1920, 1080);
+        bool normalHud = HudStateGate.IsNormalHud(norm, screens, DataStore.FindRoot(), out string? uiScreen);
+        Assert.False(normalHud, "背包帧不应被判为正常 HUD");
+        Assert.Equal("match_backpack", uiScreen);
     }
 }
