@@ -55,12 +55,35 @@ public class DataStoreTests
     [Fact]
     public void ZeroDamPoints_NoPresetRouteTables()
     {
-        // 跑刀方案 §1 强制约束：禁止预设路线/点位表。loot_points（搜刮点坐标表）已于 2026-09-30 删除；
-        // 这里钉住"数据里不得再出现 loot_points"，防止被顺手加回来。
+        // 2026-10-21 决策变更：允许「出生点→撤离点」计划路线；但**物资点位表 loot_points 仍不恢复**——
+        // 这里继续钉住"数据里不得再出现 loot_points"。
         var points = CreateStore().LoadZeroDamPoints();
         Assert.NotNull(points.ExtractPoints);
         Assert.True(points.Extra is null || !points.Extra.ContainsKey("loot_points"),
-            "zero_dam_points.json 不得再包含 loot_points（预设点位表已被跑刀方案废弃）");
+            "zero_dam_points.json 不得包含 loot_points（物资点位表仍未恢复）");
+    }
+
+    [Fact]
+    public void ZeroDamPoints_SpawnAndExtract_Calibrated()
+    {
+        // 2026-10-21 标定：14 出生点（官网筛选面板数量一致）+ 4 撤离点（用户只标常规 2 + 条件类 2）
+        var points = CreateStore().LoadZeroDamPoints();
+        Assert.Equal(14, points.SpawnPoints.Count);
+        Assert.Equal(4, points.ExtractPoints.Count);
+
+        var types = points.ExtractPoints.Select(p => p.Type).ToList();
+        Assert.Equal(2, types.Count(t => t == "常规"));
+        Assert.Contains("丢包", types);
+        Assert.Contains("条件", types);
+
+        foreach (var p in points.SpawnPoints.Concat(points.ExtractPoints))
+        {
+            Assert.False(string.IsNullOrEmpty(p.Id), "点位必须有 id（路线表引用用）");
+            Assert.NotNull(p.MapPx);
+            Assert.Equal(2, p.MapPx!.Count);
+            Assert.InRange(p.MapPx[0], 0, 4096);
+            Assert.InRange(p.MapPx[1], 0, 3072);
+        }
     }
 
     [Fact]
