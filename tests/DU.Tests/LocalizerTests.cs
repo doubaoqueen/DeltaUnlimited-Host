@@ -109,7 +109,8 @@ public class LocalizerTests
         ("m1c", "full_20261012_001113_824.jpg", 2474, 1110, "good"),
         ("m1d", "full_20261012_001457_708.jpg", 1176, 1540, "good"),
         ("m2b", "full_20261012_003010_816.jpg", 1577, 1307, "good"),
-        ("m2a", "full_20261012_002950_974.jpg", 1473, 1441, "bad"),
+        ("m1a", "full_20261012_000707_949.jpg", 2496, 1362, "good"),   // 2026-10-21 用户复核：全部对得上
+        ("m2a", "full_20261012_002950_974.jpg", 1473, 1441, "good"),   // 2026-10-21 复核改判：正确
     };
 
     [Fact]
@@ -174,3 +175,4 @@ public class LocalizerTests
         Assert.Equal("match_backpack", uiScreen);
     }
 }
+
