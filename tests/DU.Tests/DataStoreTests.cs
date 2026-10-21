@@ -76,6 +76,13 @@ public class DataStoreTests
         Assert.Contains("丢包", types);
         Assert.Contains("条件", types);
 
+        // 地点名（用户 2026-10-21 提供）：东区隧道 / 西区公路口 / 坝顶 / 维修通道
+        Assert.All(points.ExtractPoints, p => Assert.False(string.IsNullOrEmpty(p.Location), $"{p.Id} 缺 location"));
+        Assert.Contains(points.ExtractPoints, p => p.Location == "东区隧道");
+        Assert.Contains(points.ExtractPoints, p => p.Location == "西区公路口");
+        Assert.Contains(points.ExtractPoints, p => p.Location == "坝顶");
+        Assert.Contains(points.ExtractPoints, p => p.Location == "维修通道");
+
         foreach (var p in points.SpawnPoints.Concat(points.ExtractPoints))
         {
             Assert.False(string.IsNullOrEmpty(p.Id), "点位必须有 id（路线表引用用）");

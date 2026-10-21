@@ -11,6 +11,10 @@ public sealed record LocalizeResult(bool Found, LocalizeCandidate? Best, IReadOn
     public static readonly LocalizeResult Miss = new(false, null, Array.Empty<LocalizeCandidate>());
 }
 
+/// <summary>定位先验（上一帧确认的位置/尺度）：给出后只在附近窗口搜索——大幅提速且显著减少误报。
+/// RadiusPx 为允许的移动半径（底图像素）；ScalePx 给定时只在相邻尺度搜索。</summary>
+public sealed record LocalizePrior(int CenterX, int CenterY, int? ScalePx = null, int RadiusPx = 400);
+
 /// <summary>小地图定位器配置（预留 runtime.json 接入；当前由 CLI/测试直接构造）。
 /// 小地图面板圆心/半径为用户 2026-10-21 口述四点标定（设计分辨率 1920×1080 坐标）。</summary>
 public sealed class LocalizerConfig
@@ -76,8 +80,9 @@ public sealed class MinimapLocalizer : IDisposable
     public int MapHeight => _mapColor.Height;
     public LocalizerConfig Config => _cfg;
 
-    /// <summary>对一帧（已归一化到设计分辨率）定位。永不抛异常：异常时返回 Miss（上层按"未定位"处理）。</summary>
-    public LocalizeResult Localize(Mat frame)
+    /// <summary>对一帧（已归一化到设计分辨率）定位。永不抛异常：异常时返回 Miss（上层按"未定位"处理）。
+    /// <paramref name="prior"/> 非空时只在其附近窗口内搜索（实时伺服用：几百 ms/帧 → 几十 ms/帧）。</summary>
+    public LocalizeResult Localize(Mat frame, LocalizePrior? prior = null)
     {
         try
         {
@@ -87,21 +92,43 @@ public sealed class MinimapLocalizer : IDisposable
             using var miniGray = new Mat();
             Cv2.CvtColor(mini, miniGray, ColorConversionCodes.BGR2GRAY);
 
+            // 搜索源：有先验 → 只取先验附近的 ROI（坐标加回偏移）
+            Mat src = _mapGray;
+            Mat? roi = null;
+            int offX = 0, offY = 0;
+            if (prior is not null)
+            {
+                int rx = (prior.CenterX - prior.RadiusPx) / _f;
+                int ry = (prior.CenterY - prior.RadiusPx) / _f;
+                int rw = prior.RadiusPx * 2 / _f;
+                int rh = prior.RadiusPx * 2 / _f;
+                rx = Math.Clamp(rx, 0, Math.Max(0, _mapGray.Width - 2));
+                ry = Math.Clamp(ry, 0, Math.Max(0, _mapGray.Height - 2));
+                rw = Math.Clamp(rw, 2, _mapGray.Width - rx);
+                rh = Math.Clamp(rh, 2, _mapGray.Height - ry);
+                roi = new Mat(_mapGray, new Rect(rx, ry, rw, rh));
+                src = roi;
+                offX = rx;
+                offY = ry;
+            }
+
+            var scales = SelectScales(prior?.ScalePx);
             var hits = new List<LocalizeCandidate>();
             using var result = new Mat();
-            foreach (int scale in _cfg.ScalesPx)
+            foreach (int scale in scales)
             {
                 int small = Math.Max(40, scale / _f);
                 using var tpl = BuildTemplate(miniGray, small);
-                if (tpl.Width >= _mapGray.Width || tpl.Height >= _mapGray.Height) continue;
+                if (tpl.Width >= src.Width || tpl.Height >= src.Height) continue;
 
-                Cv2.MatchTemplate(_mapGray, tpl, result, TemplateMatchModes.CCoeffNormed);
+                Cv2.MatchTemplate(src, tpl, result, TemplateMatchModes.CCoeffNormed);
                 Cv2.MinMaxLoc(result, out _, out double maxVal, out _, out Point maxLoc);
                 if (double.IsNaN(maxVal) || maxVal < _cfg.MinScore) continue;
 
                 hits.Add(new LocalizeCandidate(maxVal, scale,
-                    maxLoc.X * _f + scale / 2, maxLoc.Y * _f + scale / 2));
+                    (offX + maxLoc.X) * _f + scale / 2, (offY + maxLoc.Y) * _f + scale / 2));
             }
+            roi?.Dispose();
 
             hits.Sort((a, b) => b.Score.CompareTo(a.Score));
             var top = hits.Take(Math.Max(1, _cfg.TopK)).ToArray();
@@ -111,6 +138,16 @@ public sealed class MinimapLocalizer : IDisposable
         {
             return LocalizeResult.Miss; // fail-open：定位失败不打断上层
         }
+    }
+
+    /// <summary>尺度选择：无先验全扫；有先验只扫最近 3 个尺度（小地图缩放在短时间内基本稳定）。</summary>
+    private IReadOnlyList<int> SelectScales(int? priorScale)
+    {
+        if (priorScale is null) return _cfg.ScalesPx;
+        return _cfg.ScalesPx
+            .OrderBy(s => Math.Abs(s - priorScale.Value))
+            .Take(3)
+            .ToArray();
     }
 
     /// <summary>裁出圆形小地图面板（越界自动夹取）。</summary>

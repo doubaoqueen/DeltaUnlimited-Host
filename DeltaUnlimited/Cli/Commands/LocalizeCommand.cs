@@ -1,4 +1,4 @@
-using DeltaUnlimited.Data;
+﻿using DeltaUnlimited.Data;
 using DeltaUnlimited.Vision;
 using DeltaUnlimited.Vision.Localization;
 using OpenCvSharp;
@@ -19,6 +19,7 @@ public static class LocalizeCommand
         int[]? scales = null;
         int topk = 3;
         double? minScore = null;
+        LocalizePrior? prior = null;
         for (int i = 2; i < cmdArgs.Length; i++)
         {
             switch (cmdArgs[i])
@@ -32,6 +33,17 @@ public static class LocalizeCommand
                 case "--minscore" when i + 1 < cmdArgs.Length:
                     if (double.TryParse(cmdArgs[++i], out double ms)) minScore = ms;
                     break;
+                case "--prior" when i + 1 < cmdArgs.Length:
+                {
+                    var parts = cmdArgs[++i].Split(',', StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length >= 2 && int.TryParse(parts[0], out int px) && int.TryParse(parts[1], out int py))
+                    {
+                        int? ps = parts.Length >= 3 && int.TryParse(parts[2], out int sv) ? sv : null;
+                        int pr = parts.Length >= 4 && int.TryParse(parts[3], out int rv) ? rv : 400;
+                        prior = new LocalizePrior(px, py, ps, pr);
+                    }
+                    break;
+                }
             }
         }
 
@@ -54,7 +66,7 @@ public static class LocalizeCommand
         if (minScore is { } msv) cfg.MinScore = msv;
 
         using var loc = new MinimapLocalizer(cfg, repoRoot);
-        var r = loc.Localize(norm);
+        var r = loc.Localize(norm, prior);
 
         Console.WriteLine($"小地图面板: 圆心({cfg.MiniCenterX},{cfg.MiniCenterY}) r={cfg.MiniRadius} | 底图 {loc.MapWidth}x{loc.MapHeight}");
         if (!r.Found)
@@ -80,3 +92,4 @@ public static class LocalizeCommand
             Console.WriteLine("⚠️ 多候选分数接近时勿单帧采信（重复地形会制造高分误报，见 docs/小地图定位P0验证.md §4）");
     }
 }
+

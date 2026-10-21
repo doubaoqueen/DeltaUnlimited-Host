@@ -156,6 +156,30 @@ public class LocalizerTests
     }
 
     [Fact]
+    public void Synthetic_PriorSearch_HitsWithinWindow_MissesOutside()
+    {
+        // 先验搜索（实时伺服提速用）：只在上一帧位置附近搜索；窗口外不应产生命中
+        var (root, _, expect, cfg) = MakeSynthetic();
+        try
+        {
+            string framePath = Path.Combine(root, "frame.png");
+            using var frame = Cv2.ImRead(framePath, ImreadModes.Color);
+            using var loc = new MinimapLocalizer(cfg, root);
+
+            var near = loc.Localize(frame, new LocalizePrior(expect.X + 100, expect.Y - 80, 300, 300));
+            Assert.True(near.Found, "先验附近应命中");
+            Assert.InRange(Math.Abs(near.Best!.CenterX - expect.X), 0, 25);
+
+            var far = loc.Localize(frame, new LocalizePrior(1050, 800, 300, 150)); // 远离目标
+            Assert.False(far.Found, "目标不在搜索窗口内时不应命中");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Fixture_BackpackFrame_IsGatedByHudStateGate()
     {
         // 2026-10-21 实测：背包（Tab）全屏时左上角不是小地图 —— 定位前必须被 HUD 状态门挡下

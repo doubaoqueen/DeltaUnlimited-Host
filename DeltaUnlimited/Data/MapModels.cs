@@ -58,6 +58,9 @@ public sealed class MapPoint
 
     [JsonPropertyName("name")] public string Name { get; set; } = "";
 
+    /// <summary>所在地点名（如 东区隧道/西区公路口/坝顶/维修通道）——用户 2026-10-21 提供的图内地点名。</summary>
+    [JsonPropertyName("location")] public string? Location { get; set; }
+
     /// <summary>点位类型：出生点 / 常规 / 条件 / 丢包 / 随机 / 电梯（撤离点用）。</summary>
     [JsonPropertyName("type")] public string? Type { get; set; }
 

@@ -1,4 +1,4 @@
-using DeltaUnlimited.Data;
+﻿using DeltaUnlimited.Data;
 using DeltaUnlimited.Vision;
 using DeltaUnlimited.Vision.Localization;
 using OpenCvSharp;
@@ -53,6 +53,8 @@ public static class LocalizeTrackCommand
         var screens = new DataStore(repoRoot).LoadScreens();
         using var loc = new MinimapLocalizer(cfg, repoRoot);
         var track = new LocalizerTrack(new LocalizerTrack.Options { MaxSpeedPxPerSec = maxSpeed });
+        LocalizeCandidate? lastPos = null;
+        long lastPosMs = 0;
 
         string outDir = Path.Combine(repoRoot, "logs");
         Directory.CreateDirectory(outDir);
@@ -86,11 +88,18 @@ public static class LocalizeTrackCommand
                     continue;
                 }
 
-                var raw = loc.Localize(norm);
                 long nowMs = new DateTimeOffset(DateTime.Parse(created)).ToUnixTimeMilliseconds();
+                LocalizePrior? prior = null;
+                if (lastPos is not null)
+                {
+                    double gapSec = Math.Max(1, Math.Min(60, (nowMs - lastPosMs) / 1000.0));
+                    int radius = (int)Math.Clamp(300 + gapSec * 40, 300, 1600);
+                    prior = new LocalizePrior(lastPos.CenterX, lastPos.CenterY, lastPos.ScalePx, radius);
+                }
+                var raw = loc.Localize(norm, prior);
                 var res = track.Accept(raw, nowMs);
 
-                if (res.Accepted) accepted++; else if (res.Held) held++;
+                if (res.Accepted) { accepted++; lastPos = res.Position; lastPosMs = nowMs; } else if (res.Held) held++;
                 var pos = res.Position;
                 w.WriteLine($"\"{created}\",{(res.Accepted ? 1 : 0)},{(pos is null ? "" : pos.Score.ToString("F3"))}," +
                             $"{(pos is null ? "" : pos.ScalePx.ToString())},{(pos is null ? "" : pos.CenterX.ToString())}," +
@@ -109,3 +118,4 @@ public static class LocalizeTrackCommand
             Console.WriteLine($"提示：{uiSkipped} 帧因处于对局内 UI（背包/地图/结算）被跳过——HUD 状态门在起作用");
     }
 }
+
