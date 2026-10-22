@@ -1,0 +1,32 @@
+{
+	"nodes": [
+		{"id":"g1","type":"text","text":"## ① 感知层\\n看见了什么\\n- 截图（CaptureService）\\n- OCR / 模板 / 坐标兜底\\n- 小地图定位器\\n- AI 可通行性（观察期）\\n- 廉价信号：红屏/光柱","x":0,"y":0,"width":430,"height":300,"color":"5"},
+		{"id":"g2","type":"text","text":"## ② 决策层\\n该做什么\\n- chain 引擎（2Hz 界面流转）\\n- 伺服循环（8Hz 走位）\\n- 经济决策（捡/丢/撤）\\n- 遇险即停给人","x":520,"y":0,"width":430,"height":300,"color":"4"},
+		{"id":"g3","type":"text","text":"## ③ 执行层\\n动手\\n- 拟人化键鼠（贝塞尔轨迹）\\n- 点击安全网（落点校验）\\n- 急停 / 暂停\\n- 会话限额 240 分钟","x":1040,"y":0,"width":430,"height":300,"color":"6"},
+		{"id":"g4","type":"text","text":"## ④ 数据表\\n可改的规则（改数据不改代码）\\n- screens.json 界面识别\\n- elements.json 元素定位\\n- runtime.json 标定参数\\n- zero_dam_points.json 点位","x":0,"y":420,"width":430,"height":300,"color":"3"},
+		{"id":"g5","type":"text","text":"## ⑤ 工具链\\n离线使用\\n- airecord 录制\\n- ailabel / roitune 标注\\n- localize / localizetrack\\n- track_plot 轨迹","x":520,"y":420,"width":430,"height":300,"color":"2"},
+		{"id":"g6","type":"text","text":"## ⑥ 训练线\\n离线训练，运行时零 Python\\n- prescreen VLM 初筛\\n- train.py 训练\\n- export_onnx 导出\\n- aieval 金标门禁","x":1040,"y":420,"width":430,"height":300,"color":"1"},
+		{"id":"g7","type":"text","text":"## ⛔ 红线（任何功能都不能越过）\\n1. 不读内存、不注入进程、不改游戏文件\\n2. 不做战斗/击杀/瞄准辅助；遇险即停交人\\n3. 数据不出机器（AI 全本机）\\n4. 低频、拟人、人在场，风险自担","x":0,"y":840,"width":1000,"height":220,"color":"1"},
+
+		{"id":"f1","type":"file","file":"01 项目总览.md","x":1520,"y":0,"width":330,"height":220},
+		{"id":"f2","type":"file","file":"模块-chain引擎.md","x":1520,"y":260,"width":330,"height":180},
+		{"id":"f3","type":"file","file":"模块-小地图定位器.md","x":1520,"y":480,"width":330,"height":180},
+		{"id":"f4","type":"file","file":"决策-红线与边界.md","x":1060,"y":880,"width":330,"height":160},
+		{"id":"f5","type":"file","file":"标定-地图坐标换算.md","x":0,"y":1120,"width":330,"height":160},
+		{"id":"f6","type":"file","file":"坑-小地图圆形vs矩形.md","x":380,"y":1120,"width":330,"height":160},
+		{"id":"f7","type":"file","file":"路线图与待办.md","x":760,"y":1120,"width":330,"height":160},
+		{"id":"f8","type":"file","file":"Obsidian入门.md","x":1520,"y":700,"width":330,"height":160}
+	],
+	"edges": [
+		{"id":"e1","fromNode":"g1","fromSide":"right","toNode":"g2","toSide":"left","label":"画面/状态"},
+		{"id":"e2","fromNode":"g2","fromSide":"right","toNode":"g3","toSide":"left","label":"动作"},
+		{"id":"e3","fromNode":"g4","fromSide":"top","toNode":"g1","toSide":"bottom","label":"识别规则"},
+		{"id":"e4","fromNode":"g4","fromSide":"right","toNode":"g5","toSide":"left","label":"配置"},
+		{"id":"e5","fromNode":"g5","fromSide":"right","toNode":"g6","toSide":"left","label":"标注/素材"},
+		{"id":"e6","fromNode":"g6","fromSide":"top","toNode":"g3","toSide":"bottom","label":"模型"},
+		{"id":"e7","fromNode":"g7","fromSide":"right","toNode":"f4","toSide":"left","label":"细读"},
+		{"id":"e8","fromNode":"g1","fromSide":"right","toNode":"f3","toSide":"left","label":""},
+		{"id":"e9","fromNode":"g5","fromSide":"top","toNode":"f2","toSide":"bottom","label":""},
+		{"id":"e10","fromNode":"g4","fromSide":"bottom","toNode":"f5","toSide":"top","label":""}
+	]
+}

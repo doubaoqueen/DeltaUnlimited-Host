@@ -37,3 +37,10 @@
 11 份旧文档于 2026-09-29 移入 `docs/archive/`：实施清单、C#重构指南、DeltaUnlimitedDoc、
 question-advice-doubao、界面元素清单、beforePlayingFlow、配装场景问题清单、落地技术参考、
 代码评审-20260926、开工令-助手A、key-operation.json。逐份归档原因见 `archive/README.md`。
+
+## 知识库（Obsidian，面向用户本人）
+
+`../vault/` 是 **Obsidian 知识库**（2026-10-23 建）：把项目的"为什么/怎么做/踩过什么坑/标定值"整理成 60+ 篇互相链接的笔记，入口是 `vault/00 开始这里.md`。
+- 与 `docs/` 的关系：`docs/` = 工程文档（面向开发/维护，随代码同步）；`vault/` = 可读性优先的知识库（面向"忘了细节的用户"，带双向链接、标签、属性、画布）。
+- 维护规则：`vault/_写作规范.md`；用户使用说明：`vault/10 使用说明/`。
+- 新增决策/坑/标定时应**同时**更新本目录文档与 vault（vault 负责"人看得懂"，docs 负责"可执行契约"）。

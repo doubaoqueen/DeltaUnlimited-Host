@@ -401,3 +401,9 @@ data/gui_settings.json
 
 # 提交消息临时文件（git commit -F 用，勿入库）
 .commitmsg.txt
+
+# Obsidian 知识库：笔记本身入库，本地工作区状态不入库
+vault/.obsidian/workspace*.json
+vault/.obsidian/cache/
+vault/.obsidian/plugins/
+vault/.trash/
