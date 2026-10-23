@@ -80,9 +80,12 @@ public static class ServoController
         return new ServoAction(turn, forward, sprint, note);
     }
 
-    /// <summary>是否已到达（距离可读且 ≤ 到达阈值）。距离不可读时返回 false（交由上层用其它判据）。</summary>
+    /// <summary>是否已到达。双判据（2026-10 技术债修复）：
+    /// ① 权威 = ArrivalPrompt（准星区出现 [F] 交互提示——游戏引擎的到达真值，不依赖距离标定）；
+    /// ② 辅助 = 距离可读且 ≤ 到达阈值（K0 标定出距离 OCR 后启用）。两者任一满足即到达。</summary>
     public static bool IsArrived(ServoFrame frame, ServoConfig cfg)
-        => frame.DistanceMeters >= 0 && frame.DistanceMeters <= cfg.ArriveMeters;
+        => frame.ArrivalPrompt
+           || (frame.DistanceMeters >= 0 && frame.DistanceMeters <= cfg.ArriveMeters);
 
     /// <summary>卡死判据（守卫兜底）：连续 <paramref name="needLow"/> 个周期帧差低于阈值即判定卡住。
     /// 只做判定，不做动作——动作仍走既有 Escalate 路径（与 patrol 一致）。</summary>

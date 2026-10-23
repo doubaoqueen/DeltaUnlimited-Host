@@ -6,6 +6,7 @@ using DeltaUnlimited.Overlay;
 using DeltaUnlimited.Vision;
 using DeltaUnlimited.Vision.Ocr;
 using DeltaUnlimited.Vision.Servo;
+using DeltaUnlimited.Vision.Signals;
 using OpenCvSharp;
 
 namespace DeltaUnlimited.Cli.Commands;
@@ -36,6 +37,21 @@ public static class ChainCommand
 
         CommandUtil.InstallEmergencyStop();
 
+        // 债1 会话限额执法（2026-10）：启动闸——超额拒绝开工。GUI 与 CLI 都必经此处，一处卡死全部。
+        // 运行闸在两处：步骤边界（超时即收尾）+ follow_marker 伺服每周期（stopped 闭包）。
+        var session = SessionLedger.TryBegin(
+            SessionLedger.DefaultPath(repoRoot), runtime.SessionLimits, DateTime.Now, out var denyReason);
+        if (session is null)
+        {
+            Console.WriteLine($"⛔ {denyReason}");
+            Logger.Warn($"会话限额拒绝启动: {denyReason}");
+            return;
+        }
+        using var ledger = session;
+        if (runtime.SessionLimits.MaxMinutesPerDay > 0)
+            Console.WriteLine($"⏱ 今日自动化限额 {runtime.SessionLimits.MaxMinutesPerDay} 分钟"
+                              + "（账本 data/session_state.json，跨重启累计，被杀进程照样计账）");
+
         Console.WriteLine($"执行链路: {chain.Name}（{chain.Steps.Count} 步） 模式: {(auto ? "全自动" : "半自动（pause 步骤回车继续）")}");
         Console.WriteLine("Ctrl+C 随时急停。");
 
@@ -54,6 +70,12 @@ public static class ChainCommand
         while (i < chain.Steps.Count)
         {
             CommandUtil.AbortIfStopped(); // 急停检查点：每个步骤边界
+            if (ledger.ExceededNow(DateTime.Now))
+            {
+                Console.WriteLine("⏱ 会话限额到点——链路优雅收尾（已完成步骤的成果保留）");
+                Logger.Info("会话限额到点，链路提前收尾");
+                break;
+            }
             var s = chain.Steps[i];
             Console.WriteLine($"\n[步骤 {i + 1}/{chain.Steps.Count}] {s.Op}");
             Logger.Info($"链路 {chainFile} 步骤 {i + 1}/{chain.Steps.Count} {s.Op}");
@@ -131,14 +153,19 @@ public static class ChainCommand
                     var actor = new KeyboardMouseActor(
                         ops.KeyMap.GetValueOrDefault("move_forward", "w"),
                         ops.KeyMap.GetValueOrDefault("sprint", "shift"));
+                    string? promptTpl = s.PromptTemplate is null ? null : Path.Combine(repoRoot, s.PromptTemplate);
+                    var hitFlash = new HitFlashMonitor(DefaultSignals.HitFlash(), new Random());
                     var perceiver = new TemplateMarkerPerceiver(
                         () => CaptureService.CaptureWindowMat(winKeyword),
                         Path.Combine(repoRoot, tpl),
-                        runtime.DesignWidth, runtime.DesignHeight);
+                        runtime.DesignWidth, runtime.DesignHeight,
+                        promptTemplatePath: promptTpl,
+                        promptRegion: s.PromptRegion,
+                        dangerProbe: hitFlash.Update);   // 债3：受击红屏信号接线（触发即 Danger 交人工）
                     Console.WriteLine($"  🧭 跟随导航标记（模板 {tpl}，最长 {servoTimeout}ms，8Hz）...");
                     var servo = FollowMarkerOp.Run(perceiver, actor, runtime.Servo,
                         new ServoLoop.Options { TimeoutMs = servoTimeout },
-                        new Random(), stopped: () => CommandUtil.StopRequested);
+                        new Random(), stopped: () => CommandUtil.StopRequested || ledger.ExceededNow(DateTime.Now));
                     Logger.Info($"伺服结束: {servo.Outcome} {servo.Detail}（{servo.ElapsedMs:F0}ms）");
                     Console.WriteLine($"  🏁 伺服结局 {servo.Outcome}: {servo.Detail}");
 
@@ -603,14 +630,16 @@ public static class ChainCommand
                         errors.Add($"步骤{idx}: follow_marker 缺少 template（导航标记模板）");
                     else if (!File.Exists(Path.Combine(repoRoot, s.Template)))
                         errors.Add($"步骤{idx}: 模板文件不存在: {s.Template}");
+                    if (!string.IsNullOrEmpty(s.PromptTemplate) && !File.Exists(Path.Combine(repoRoot, s.PromptTemplate!)))
+                        errors.Add($"步骤{idx}: prompt_template 文件不存在: {s.PromptTemplate}");
                     if (s.Branches is { Count: > 0 })
                     {
                         var validOutcomes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                            { "success", "timeout", "stopped", "stuck", "danger", "error" };
+                            { "success", "timeout", "stopped", "stuck", "danger", "markerlost", "error" };
                         foreach (var (o, tgt) in s.Branches)
                         {
                             if (!validOutcomes.Contains(o))
-                                errors.Add($"步骤{idx}: follow_marker 分支 “{o}” 不是合法伺服结局（success/timeout/stopped/stuck/danger/error）");
+                                errors.Add($"步骤{idx}: follow_marker 分支 “{o}” 不是合法伺服结局（success/timeout/stopped/stuck/danger/markerlost/error）");
                             if (string.IsNullOrEmpty(tgt) || chain.Steps.All(x => x.Id != tgt))
                                 errors.Add($"步骤{idx}: follow_marker 分支 “{o}” 的跳转目标 “{tgt}” 不存在");
                         }

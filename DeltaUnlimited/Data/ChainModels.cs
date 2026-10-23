@@ -42,6 +42,14 @@ public sealed class ChainStep
     [JsonPropertyName("template")]
     public string? Template { get; set; }
 
+    /// <summary>follow_marker 专用：[F] 交互提示模板（到达判据权威）。缺省时只用 markerlost 兜底。</summary>
+    [JsonPropertyName("prompt_template")]
+    public string? PromptTemplate { get; set; }
+
+    /// <summary>follow_marker 专用：提示搜索区域 [x,y,w,h]（准星附近小 ROI）。</summary>
+    [JsonPropertyName("prompt_region")]
+    public int[]? PromptRegion { get; set; }
+
     [JsonPropertyName("threshold")]
     public double? Threshold { get; set; }
 

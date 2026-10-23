@@ -52,6 +52,71 @@ public class FollowMarkerOpTests
         Assert.Contains(actor.Performed, a => a == ServoAction.Idle);
     }
 
+    /// <summary>前 N 帧可见、之后丢失的有状态假感知器（markerlost 用例）。</summary>
+    private sealed class VanishingMarkerPerceiver : IServoPerceiver
+    {
+        private int _visibleLeft;
+        public VanishingMarkerPerceiver(int visibleLeft) => _visibleLeft = visibleLeft;
+        public ServoFrame Observe()
+        {
+            if (_visibleLeft > 0) { _visibleLeft--; return new ServoFrame(true, 0, -1, 20, false); }
+            return new ServoFrame(false, 0, -1, 20, false);
+        }
+    }
+
+    [Fact]
+    public void ArrivalPrompt_ReachesSuccess_EvenWithUnknownDistance()
+    {
+        // 债2回归核心：此前 DistanceMeters 恒 -1 → Success 永远不可达；提示出现即到达
+        var actor = new FakeActor();
+        var r = FollowMarkerOp.Run(
+            new FakePerceiver(new ServoFrame(true, 0, -1, 20, false, ArrivalPrompt: true)),
+            actor, Cfg(), FastOpts(), new Random(1), stopped: () => false);
+
+        Assert.Equal(ServoOutcome.Success, r.Outcome);
+        Assert.Contains("交互提示", r.Detail);
+        Assert.Equal(1, actor.ReleaseCount);
+    }
+
+    [Fact]
+    public void MarkerLost_AfterSeen_ReleasesKeys()
+    {
+        // 标记见过后持续消失 → MarkerLost（疑似到点上方），不是无脑超时
+        var actor = new FakeActor();
+        var r = FollowMarkerOp.Run(
+            new VanishingMarkerPerceiver(visibleLeft: 2),
+            actor, Cfg(), FastOpts() with { MarkerLostGiveUpCycles = 5 }, new Random(1), stopped: () => false);
+
+        Assert.Equal(ServoOutcome.MarkerLost, r.Outcome);
+        Assert.Equal(1, actor.ReleaseCount);
+    }
+
+    [Fact]
+    public void MarkerNeverSeen_DoesNotFireMarkerLost()
+    {
+        // 开局从未见过标记：那是感知问题（模板不对/没标点），交超时，不误报"疑似到达"
+        var actor = new FakeActor();
+        var r = FollowMarkerOp.Run(
+            new FakePerceiver(new ServoFrame(false, 0, -1, 20, false)),
+            actor, Cfg(), FastOpts() with { MarkerLostGiveUpCycles = 5, TimeoutMs = 5 }, new Random(1), stopped: () => false);
+
+        Assert.Equal(ServoOutcome.Timeout, r.Outcome);
+    }
+
+    [Fact]
+    public void HitFlash_ReturnsDanger_AndReleasesKeys()
+    {
+        // 债3：受击红屏信号（防抖已过）→ Danger 立即交人工，不自动逃跑
+        var actor = new FakeActor();
+        var r = FollowMarkerOp.Run(
+            new FakePerceiver(new ServoFrame(true, 0, 200, 20, false, ArrivalPrompt: false, HitFlash: true)),
+            actor, Cfg(), FastOpts(), new Random(1), stopped: () => false);
+
+        Assert.Equal(ServoOutcome.Danger, r.Outcome);
+        Assert.Contains("受击", r.Detail);
+        Assert.Equal(1, actor.ReleaseCount);
+    }
+
     [Fact]
     public void EmergencyStop_ReleasesKeys_AndReportsStopped()
     {

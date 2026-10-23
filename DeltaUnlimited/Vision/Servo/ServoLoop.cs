@@ -25,6 +25,11 @@ public static class ServoLoop
 
         /// <summary>可通行性预警连续 N 个周期仍为 blocked → 交人工（不自动绕行）。</summary>
         public int BlockedGiveUpCycles { get; init; } = 10;
+
+        /// <summary>标记丢失判据：标记曾可见后连续丢失 ≥ N 个周期 → MarkerLost 结局
+        /// （站在标记点上时 HUD 标记常消失——这是距离不可读时的辅助到达信号，不是失败）。
+        /// 0 = 关闭该判据。仅统计"曾见过标记"之后的丢失；开局从未见过的不算（那是感知问题，走超时）。</summary>
+        public int MarkerLostGiveUpCycles { get; init; } = 25;
     }
 
     /// <summary>跑一轮伺服。
@@ -48,6 +53,8 @@ public static class ServoLoop
         int cycleMs = Math.Max(10, (int)Math.Round(1000.0 / Math.Max(0.5, opt.CycleHz)));
         var recentDiffs = new List<double>(opt.StuckNeedLow * 2);
         int blockedRun = 0;
+        bool hasSeenMarker = false;
+        int markerLostRun = 0;
 
         for (int cycle = 0; cycle < opt.MaxCycles; cycle++)
         {
@@ -70,7 +77,28 @@ public static class ServoLoop
             if (ServoController.IsArrived(frame, cfg))
             {
                 act(ServoAction.Idle);
-                return new ServoResult(ServoOutcome.Success, $"已到达目标点（{frame.DistanceMeters:F0}m）", clock() - start);
+                string how = frame.ArrivalPrompt ? "交互提示出现" : $"{frame.DistanceMeters:F0}m";
+                return new ServoResult(ServoOutcome.Success, $"已到达目标点（{how}）", clock() - start);
+            }
+
+            // 受击红屏（HitFlashMonitor 防抖确认后）：红线——立即交人工，不自动逃跑（提案 §2）
+            if (frame.HitFlash)
+            {
+                act(ServoAction.Idle);
+                return new ServoResult(ServoOutcome.Danger, "受击红屏信号触发——松键交人工（不自动逃跑）", clock() - start);
+            }
+
+            if (frame.MarkerVisible)
+            {
+                hasSeenMarker = true;
+                markerLostRun = 0;
+            }
+            else if (hasSeenMarker && opt.MarkerLostGiveUpCycles > 0 && ++markerLostRun >= opt.MarkerLostGiveUpCycles)
+            {
+                act(ServoAction.Idle);
+                return new ServoResult(ServoOutcome.MarkerLost,
+                    $"标记消失持续 {markerLostRun} 周期——疑似已到点上方（chain 应走确认分支，如查 [F] 提示）",
+                    clock() - start);
             }
 
             if (ServoController.IsStuck(recentDiffs.ToArray(), opt.StuckDiffThreshold, opt.StuckNeedLow))

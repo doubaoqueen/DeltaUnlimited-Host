@@ -119,12 +119,13 @@ public static class DefaultSignals
     public static SignalSpec HitFlash() => new()
     {
         Name = "hit_flash",
-        Region = "zone_left_mid,zone_right_mid（屏幕两侧边缘条）",
-        ThresholdMin = 0.18,
+        Region = "两侧边缘条（各宽 W/16，y 25%-75%），RedFlashDetector.EdgeRedRatio",
+        ThresholdMin = 0.20,
         ThresholdMax = 0.30,
         ConfirmFrames = 3,
         Fallback = "AbortToPause 人工接管（不自动逃跑）",
-        Source = "待 K0 标定（docs/K0采集清单.md §6.1 受击红屏样本）",
+        Source = "K0 两批 704 帧离线标定（2026-10-24）：正常帧 p90=0.10/p99≈0.40（含红脸场景），"
+                 + "受击尖峰 0.63-0.80（00:08:09/19/57 等簇）；阈值取间隙中带，误报代价=暂停交人工（安全侧）",
     };
 
     /// <summary>金光柱通道（物资箱高光）。</summary>
