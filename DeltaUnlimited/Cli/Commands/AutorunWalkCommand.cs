@@ -49,6 +49,8 @@ public static class AutorunWalkCommand
         IntPtr hwnd = CaptureService.FindWindowByTitle(runtime.WindowKeyword);
         if (hwnd == IntPtr.Zero) throw new InvalidOperationException($"没找到标题含 “{runtime.WindowKeyword}” 的窗口");
         CaptureService.LogWindowAnchor(hwnd, runtime.DesignWidth, runtime.DesignHeight);
+        if (!InputService.EnsureForeground(hwnd))
+            Console.WriteLine("⚠ 未能把游戏置前台——按键可能落不进游戏，若角色不动请点一下游戏窗口");
         CommandUtil.InstallEmergencyStop();
 
         // 定位 + 轨迹 + 门
@@ -107,12 +109,32 @@ public static class AutorunWalkCommand
                     if (sw.Elapsed.TotalMinutes >= minutes) { outcome = "时限到"; break; }
                     cycles++;
 
-                    using Mat frame = CaptureService.CaptureWindowMat(hwnd, raiseAndWait: false);
+                    Mat frame;
+                    try
+                    {
+                        frame = CaptureService.CaptureWindowMat(hwnd, raiseAndWait: cycles == 1);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"⚠ 截图失败（{ex.Message}）——1 秒后重试。游戏窗口被最小化/关闭会一直如此");
+                        jsonl.WriteLine(J(cycles, null, null, null, "capture_fail", 0, ex.Message.Replace('"', '\'')));
+                        Thread.Sleep(1000);
+                        continue;
+                    }
+                    if (frame.Empty())
+                    {
+                        Console.WriteLine("⚠ 截到空帧（窗口不可见？）——1 秒后重试");
+                        jsonl.WriteLine(J(cycles, null, null, null, "empty_frame", 0, "空帧"));
+                        Thread.Sleep(1000);
+                        continue;
+                    }
+                    using var _f = frame;
 
                     // HUD 门：背包/地图/结算等全屏 UI 时小地图不可用，原地等待
                     if (!HudStateGate.IsNormalHud(frame, screens, repoRoot, out var ui))
                     {
                         InputService.ReleaseAllHeldKeys();
+                        Console.WriteLine($"[{sw.Elapsed:mm\\:ss}] 全屏 UI（{ui}）——小地图不可用，原地等待");
                         jsonl.WriteLine(J(cycles, null, null, null, "ui_blocked", 0, $"UI覆盖:{ui}"));
                         Thread.Sleep(1000);
                         continue;
@@ -132,7 +154,14 @@ public static class AutorunWalkCommand
                         positions.Add((now.CenterX, now.CenterY, sw.ElapsedMilliseconds));
                         locMissRun = 0;
                     }
-                    else locMissRun++;
+                    else
+                    {
+                        if (cycles <= 3 || locMissRun == 10)
+                            Console.WriteLine($"  ℹ 定位未接受（第 {cycles} 周期）：{tr.Note}");
+                        locMissRun++;
+                    }
+                    if (track.Last is { } first && positions.Count == 1)
+                        Console.WriteLine($"  ✅ 首锚成功：map_px ({first.CenterX:F0},{first.CenterY:F0}) 分数 {first.Score:F2}");
                     if (locMissRun >= 20) { outcome = "定位失联（20 周期无有效位置）"; break; }
 
                     double? course = null;
