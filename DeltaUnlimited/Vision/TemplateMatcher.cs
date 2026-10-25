@@ -7,14 +7,14 @@ namespace DeltaUnlimited.Vision;
 /// 模板按路径缓存于内存，避免循环中反复读盘（#4）。</summary>
 public static class TemplateMatcher
 {
-    private static readonly ConcurrentDictionary<string, Mat> TemplateCache = new();
+    private static ConcurrentDictionary<string, Mat> TemplateCache = new();
 
-    /// <summary>清空模板缓存并释放内存（程序退出/测试清理用）。</summary>
+    /// <summary>清空模板缓存（测试隔离用：下次 LoadTemplate 重新读盘）。
+    /// 实现：原子换新字典而非逐个 Dispose——并行调用方（xUnit 测试类并行）可能正持有缓存模板做匹配，
+    /// 逐个释放会造成 use-after-dispose（0xC0000005，实测踩过）。旧字典交给 GC，Mat 终结器回收原生内存。</summary>
     public static void ClearCache()
     {
-        foreach (var kv in TemplateCache)
-            kv.Value.Dispose();
-        TemplateCache.Clear();
+        TemplateCache = new ConcurrentDictionary<string, Mat>();
     }
 
     /// <summary>在帧内找模板的最佳位置，返回是否命中（置信度 ≥ threshold）及中心点。

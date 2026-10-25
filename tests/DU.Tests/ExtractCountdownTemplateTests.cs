@@ -9,7 +9,7 @@ namespace DU.Tests;
 /// 走运行时同一条路（TemplateMatcher.Match + TM_CCOEFF_NORMED + searchRegion），
 /// 不用模拟——钉住"模板 + 区域 [850,90,230,100] + 阈值 0.80"这套配置的正负样本表现。
 /// 素材为 K0 实帧（tests/fixtures/，gitignore 不出库）：缺任一素材整组跳过（fixtures 管线约定）。</summary>
-public class ExtractCountdownTemplateTests : IDisposable
+public class ExtractCountdownTemplateTests
 {
     private readonly ITestOutputHelper _out;
     private static readonly int[] Region = { 850, 90, 230, 100 };
@@ -22,7 +22,8 @@ public class ExtractCountdownTemplateTests : IDisposable
 
     public ExtractCountdownTemplateTests(ITestOutputHelper outHelper) => _out = outHelper;
 
-    public void Dispose() => TemplateMatcher.ClearCache();
+    // 注意：不 ClearCache——静态模板缓存与 MatchScreensTests 等并行测试共享，
+    // 中途清缓存会释放别人正在用的 Mat（0xC0000005 竞态，实测踩过）。缓存随进程退出回收。
 
     /// <summary>从测试 bin 向上找仓库根（.git 所在层），再拼模板路径；找不到返回 null（跳过）。</summary>
     private static string? FindTemplate()
