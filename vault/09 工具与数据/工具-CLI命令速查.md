@@ -111,3 +111,10 @@ capture 截图 → crop 裁小图 → tplprobe 验证命中 → 填进 data/elem
 - 文档：`DeltaUnlimited/Cli/README.md`（A-D 四组命令 + 二次使用套路 + 两条铁律）
 - 文档：`README.md`「CLI 命令速览」（注意其中 `dotnet run` 必须指定项目的说明）
 - 文档：`docs/模块说明.md` §2（命令层表格，数字"12 个"已过期）
+
+## 新增命令（2026-10-26 追加）
+
+| 命令 | 干什么 | 备注 |
+|---|---|---|
+| `tplprobe --live <模板> [阈值] [x y w h]` | **实时模板匹配**：对游戏窗口逐帧验证模板（人眼对照命中翻转） | 实机验证模板用；静态模式不变 |
+| `autorun_walk [--extract E2] [--minutes 10]` | **自动跑图实验**：定位+方位伺服+倒车请注意脱困；轨迹 JSONL+底图回放落盘 `logs/autorun/` | 人盯实验；会话限额执法；[[决策-自动跑图实验v1]] |
