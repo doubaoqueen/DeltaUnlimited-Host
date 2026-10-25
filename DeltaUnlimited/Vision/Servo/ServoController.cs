@@ -81,7 +81,7 @@ public static class ServoController
     }
 
     /// <summary>是否已到达。双判据（2026-10 技术债修复）：
-    /// ① 权威 = ArrivalPrompt（准星区出现 [F] 交互提示——游戏引擎的到达真值，不依赖距离标定）；
+    /// ① 权威 = ArrivalPrompt（到达确认 UI——撤离场景为顶部倒计时条，只在撤离区内出现；不依赖距离标定）；
     /// ② 辅助 = 距离可读且 ≤ 到达阈值（K0 标定出距离 OCR 后启用）。两者任一满足即到达。</summary>
     public static bool IsArrived(ServoFrame frame, ServoConfig cfg)
         => frame.ArrivalPrompt

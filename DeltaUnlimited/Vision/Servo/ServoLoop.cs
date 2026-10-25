@@ -97,7 +97,7 @@ public static class ServoLoop
             {
                 act(ServoAction.Idle);
                 return new ServoResult(ServoOutcome.MarkerLost,
-                    $"标记消失持续 {markerLostRun} 周期——疑似已到点上方（chain 应走确认分支，如查 [F] 提示）",
+                    $"标记消失持续 {markerLostRun} 周期——疑似已到点上方（chain 应走确认分支，如查撤离倒计时）",
                     clock() - start);
             }
 

@@ -5,7 +5,7 @@ namespace DeltaUnlimited.Vision.Servo;
 
 /// <summary>导航标记感知器（follow_marker 的真实实现，K1 用）：
 /// 每周期抓帧 → 归一化到设计分辨率 → 导航标记模板匹配 → 输出 ServoFrame。
-/// 到达判据权威 = ArrivalPrompt：准星区 [F] 交互提示模板匹配（2026-10 技术债修复——
+/// 到达判据权威 = ArrivalPrompt：到达确认 UI 模板匹配——撤离场景即顶部撤离倒计时条（2026-10 技术债修复——
 /// 之前 DistanceMeters 恒 -1 而 IsArrived 要求距离可读，Success 结局永远不可达）。
 /// 距离仍不可读（DistanceMeters=-1），留作 K0 标定后的进度显示（不参与到达判定）。
 /// 卡墙守卫用的 FrameDiff 在同一帧算好，无需另起采样。</summary>
@@ -13,7 +13,7 @@ public sealed class TemplateMarkerPerceiver : IServoPerceiver
 {
     private readonly Func<Mat> _capture;      // 抓帧委托（真实=CaptureService；测试=假帧）
     private readonly string _templatePath;    // 导航标记模板（K0 标定产物）
-    private readonly string? _promptTemplatePath;  // [F] 交互提示模板（到达判据权威；null=该判据关闭）
+    private readonly string? _promptTemplatePath;  // 到达确认 UI 模板（撤离=顶部倒计时条；null=该判据关闭）
     private readonly int _designW;
     private readonly int _designH;
     private readonly double _threshold;

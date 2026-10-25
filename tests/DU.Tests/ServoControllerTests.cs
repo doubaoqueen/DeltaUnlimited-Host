@@ -87,7 +87,7 @@ public class ServoControllerTests
     [Fact]
     public void IsArrived_PromptIsAuthoritative_EvenWithoutDistance()
     {
-        // 债2回归：距离不可读（-1）但准星区出现 [F] 提示 → 到达（权威判据，不依赖距离标定）
+        // 债2回归：距离不可读（-1）但到达确认 UI（撤离倒计时条）出现 → 到达（权威判据，不依赖距离标定）
         Assert.True(ServoController.IsArrived(new ServoFrame(true, 0, -1, 10, false, ArrivalPrompt: true), Cfg()));
         // 提示缺席且距离不可读 → 不算
         Assert.False(ServoController.IsArrived(new ServoFrame(true, 0, -1, 10, false, ArrivalPrompt: false), Cfg()));

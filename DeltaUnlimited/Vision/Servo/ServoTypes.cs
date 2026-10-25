@@ -19,7 +19,7 @@ public enum ServoOutcome
     Danger,
 
     /// <summary>标记持续丢失（曾可见后消失 ≥ MarkerLostGiveUpCycles 周期）——疑似到达点上方/越过错点，
-    /// 距离不可读时的辅助到达判据；chain 侧应走"确认到达"分支（如识别 [F] 交互提示）而非当失败。</summary>
+    /// 距离不可读时的辅助到达判据；chain 侧应走"确认到达"分支（如识别撤离倒计时条）而非当失败。</summary>
     MarkerLost,
 
     /// <summary>感知/输入异常。</summary>
@@ -40,7 +40,7 @@ public sealed record ServoFrame(
     double DistanceMeters,    // 距离（-1 = 不可读/未知）
     double FrameDiff,         // 本周期帧差（卡墙守卫用）
     bool HitBlocked,          // AI 可通行性预警（observe-only 时恒 false）
-    bool ArrivalPrompt = false,  // 到达判据权威：准星区出现交互提示（如 [F] 撤离）——游戏引擎说到了才算到
+    bool ArrivalPrompt = false,  // 到达判据权威：到达确认 UI 出现（撤离=顶部倒计时条，仅在撤离区内绘制）——游戏引擎说到了才算到
     bool HitFlash = false)       // 受击红屏信号（HitFlashMonitor 防抖确认后置 true）——触发即 Danger 交人工
 {
     public static readonly ServoFrame None = new(false, 0, -1, 0, false);

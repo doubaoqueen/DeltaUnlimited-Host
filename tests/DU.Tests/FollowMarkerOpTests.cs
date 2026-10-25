@@ -67,7 +67,7 @@ public class FollowMarkerOpTests
     [Fact]
     public void ArrivalPrompt_ReachesSuccess_EvenWithUnknownDistance()
     {
-        // 债2回归核心：此前 DistanceMeters 恒 -1 → Success 永远不可达；提示出现即到达
+        // 债2回归核心：此前 DistanceMeters 恒 -1 → Success 永远不可达；到达确认 UI（撤离倒计时）出现即到达
         var actor = new FakeActor();
         var r = FollowMarkerOp.Run(
             new FakePerceiver(new ServoFrame(true, 0, -1, 20, false, ArrivalPrompt: true)),
