@@ -25,6 +25,7 @@ public static class Usage
               chain <workflow文件> [--auto]        按 JSON 步骤执行链路（detect/if_screen 分支/jump）
               crop <x> <y> <w> <h> <源图> [输出] [缩放]   从截图裁模板小图（可缩放换算设计分辨率）
               ocr <截图路径> [关键词...]      OCR 诊断：识别全部词 + 关键词严格/候选匹配
+              tplprobe <截图> <模板> [阈值]    模板匹配诊断（置信度/位置）；--live <模板> 实时对游戏窗口逐帧匹配
               overlay                           悬浮状态面板（游戏画面上实时显示识别/操作日志）
               windows                           列出可见窗口
             """);
