@@ -21,6 +21,7 @@ public static class Usage
               ailabel [--start unlabeled|first|行号]  素材标注器（默认跳第一个未标帧；A/S/D/F 打标，←/→ 翻页，N 跳下一未标，G 跳任意张；兼容 1/2/0/B，[--only-usable] [--gold-first]）
               roitune [截图路径]                  ROI 调参器（实时对游戏画面/静态图移动绿框，回车保存 ai_vision.json）
               aiprobe [图片路径...]               AI 探针：实时（对游戏画面）/静态（对截图）显示可通行性判定
+              autorun_walk [--extract E2] [--minutes 10]  自动跑图实验：定位+方位伺服+倒车脱困；轨迹与回放图落盘 logs/autorun/
               aieval [模型] [数据集目录]         三分类评估（混淆矩阵/macro-F1，金标集门禁离线版）
               chain <workflow文件> [--auto]        按 JSON 步骤执行链路（detect/if_screen 分支/jump）
               crop <x> <y> <w> <h> <源图> [输出] [缩放]   从截图裁模板小图（可缩放换算设计分辨率）

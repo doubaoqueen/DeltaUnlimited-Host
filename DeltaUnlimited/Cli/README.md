@@ -54,6 +54,7 @@
 |---|---|
 | `chain <workflow.json> [--auto]` | JSON 状态机链路（enter_match v7：任意界面启动/中断恢复） |
 | `patrol [秒]` | 反应式巡逻伺服（贴墙+横移双守卫；**AI 感知 observe-only 挂载点**） |
+| `autorun_walk [--extract E2] [--minutes 10]` | **自动跑图实验** | 定位+方位伺服+"倒车请注意"脱困（人盯）；轨迹 JSONL+底图回放落盘 `logs/autorun/`——路线图设计的探路实验 |
 | `overlay` | 游戏画面上的悬浮状态面板 |
 | `gui` | 图形控制面板（无参数/双击 exe 同） |
 | `smoke` | 数据层冒烟测试 |
