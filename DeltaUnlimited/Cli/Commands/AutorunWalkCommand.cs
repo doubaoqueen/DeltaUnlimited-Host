@@ -73,6 +73,12 @@ public static class AutorunWalkCommand
             Console.WriteLine("⚠ 模型文件不在，本实验不记录可通行性观察（不影响行走）");
         }
 
+        // 撤离区信号：倒计时卡片角标模板（2026-10-24 定标，ExtractCountdownTemplateTests 已钉死）。
+        string extractTpl = Path.Combine(repoRoot, "assets", "templates", "extract_countdown_corner.png");
+        int[] extractRegion = { 850, 90, 230, 100 };
+        bool hasExtractTpl = File.Exists(extractTpl);
+        if (!hasExtractTpl) Console.WriteLine("⚠ 撤离倒计时模板不在（assets/templates/），本次不识别撤离区");
+
         string fwd = ops.KeyMap.GetValueOrDefault("move_forward", "w");
         string back = ops.KeyMap.GetValueOrDefault("move_back", "s");
         string sprintK = ops.KeyMap.GetValueOrDefault("sprint", "shift");
@@ -99,6 +105,8 @@ public static class AutorunWalkCommand
         (double x, double y)? courseAnchor = null;   // 航迹锚点：走出去 ≥8px 才算一次航向（比例尺适配）
         int walkRun = 0;                    // 连续前进周期数（进度版贴墙判据用）
         (double x, double y)? walkStart = null;      // 本轮连续前进的起点
+        bool extracting = false;           // 已站入撤离区（倒计时出现）——站定直到结算/中断
+        long? goalReachedAt = null;        // 到达目标半径时刻（站定等倒计时，30s 无信号交人）
         string outcome = "未知";
         double startDist = -1;
 
@@ -133,13 +141,52 @@ public static class AutorunWalkCommand
                     }
                     using var _f = frame;
 
-                    // HUD 门：背包/地图/结算等全屏 UI 时小地图不可用，原地等待
+                    // HUD 门：背包/地图/结算等全屏 UI 时小地图不可用；结算画面 = 终局
                     if (!HudStateGate.IsNormalHud(frame, screens, repoRoot, out var ui))
                     {
                         InputService.ReleaseAllHeldKeys();
+                        if (ui == "match_settlement_success")
+                        {
+                            outcome = extracting || goalReachedAt is not null
+                                ? "🎉 撤离成功（站定后等到结算）"
+                                : "🎉 撤离成功结算（未经导航到达——人工带入或恰好身处撤离区）";
+                            jsonl.WriteLine(J(cycles, null, null, null, "settled", 0, outcome));
+                            break;
+                        }
+                        if (ui == "match_settlement_fail")
+                        {
+                            outcome = "💀 撤离失败/死亡结算——交人工复盘";
+                            jsonl.WriteLine(J(cycles, null, null, null, "settled", 0, outcome));
+                            break;
+                        }
                         Console.WriteLine($"[{sw.Elapsed:mm\\:ss}] 全屏 UI（{ui}）——小地图不可用，原地等待");
                         jsonl.WriteLine(J(cycles, null, null, null, "ui_blocked", 0, $"UI覆盖:{ui}"));
                         Thread.Sleep(1000);
+                        continue;
+                    }
+
+                    // 撤离区检测（任意撤离点通用，含点位表外的电梯等）：倒计时角标出现 =
+                    // 游戏权威宣告"你正站在某个撤离区内"——站定不动，等结算画面（上方门会接住）。
+                    bool inZone = hasExtractTpl
+                                  && TemplateMatcher.Match(frame, extractTpl, 0.80, extractRegion).Found;
+                    if (inZone && !extracting)
+                    {
+                        extracting = true;
+                        InputService.ReleaseAllHeldKeys();
+                        Console.WriteLine("🚪 撤离倒计时出现——站定不动等撤离（目标外撤离点同样生效，如电梯）");
+                        jsonl.WriteLine(J(cycles, null, null, null, "extract_wait", 0, "进入撤离区，站定等待"));
+                        Thread.Sleep(800);
+                        continue;
+                    }
+                    if (extracting && !inZone)
+                    {
+                        extracting = false;
+                        Console.WriteLine("↩ 倒计时消失（被挤出/中断）——恢复导航");
+                        jsonl.WriteLine(J(cycles, null, null, null, "extract_lost", 0, "撤离中断，恢复导航"));
+                    }
+                    if (extracting)
+                    {
+                        Thread.Sleep(800);   // 站定周期：不动，只等结算
                         continue;
                     }
 
@@ -247,7 +294,8 @@ public static class AutorunWalkCommand
                     switch (plan.Phase)
                     {
                         case WalkPhase.Arrived:
-                            outcome = "✅ 到达目标点半径内";
+                            InputService.ReleaseAllHeldKeys();
+                            goalReachedAt ??= sw.ElapsedMilliseconds;
                             break;
                         case WalkPhase.GiveUp:
                             outcome = "⛔ 连续脱困失败交人工";
@@ -286,11 +334,23 @@ public static class AutorunWalkCommand
                             walkStart ??= (positions.Count > 0 ? (positions[^1].x, positions[^1].y) : ((double)0, 0));
                             break;
                     }
-                    if (plan.Phase is WalkPhase.Arrived or WalkPhase.GiveUp)
+                    if (plan.Phase == WalkPhase.GiveUp)
                     {
-                        jsonl.WriteLine(J(cycles, px, py, course, plan.Phase.ToString().ToLowerInvariant(), diff,
-                            $"{plan.Note} dist={dist:F0}px"));
+                        jsonl.WriteLine(J(cycles, px, py, course, "giveup", diff, $"{plan.Note} dist={dist:F0}px"));
                         break;
+                    }
+                    if (plan.Phase == WalkPhase.Arrived)
+                    {
+                        if (sw.ElapsedMilliseconds - goalReachedAt > 30_000)
+                        {
+                            outcome = "📍 到达目标半径但 30s 未见撤离倒计时——点位偏差或条件撤离未满足，交人工";
+                            jsonl.WriteLine(J(cycles, px, py, course, "arrived_no_countdown", diff, outcome));
+                            break;
+                        }
+                        jsonl.WriteLine(J(cycles, px, py, course, "arrived_standby", diff,
+                            $"站定等倒计时（{30 - (sw.ElapsedMilliseconds - goalReachedAt) / 1000}s 内） dist={dist:F0}px"));
+                        Thread.Sleep(800);
+                        continue;
                     }
 
                     jsonl.WriteLine(J(cycles, px, py, course, plan.Phase.ToString().ToLowerInvariant(), diff,
