@@ -209,8 +209,19 @@ public static class AutorunWalkCommand
                         aiNote = $"{r.Class}:{r.Confidence:F2}";
                     }
 
-                    // 决策 + 执行
-                    var plan = WalkNavigator.Decide(course, bearing, dist, arrivePx, stuck, recovery, rng);
+                    // 决策 + 执行。⚠ 从未有过定位锚点时绝不能拿"目标坐标兜底"去算距离——
+                    // 双帧首锚意味着第 1 周期必然无位置，兜底会算出距离 0 → 假"到达"（首跑实测踩过）。
+                    // 此时唯一合理动作 = 盲走建立航迹，等定位确认后再导航。
+                    WalkPlan plan;
+                    if (px is null && positions.Count == 0)
+                    {
+                        plan = new WalkPlan(WalkPhase.Explore, 0, false,
+                            locMissRun == 0 && cycles == 1 ? "首周期双帧锚未立：盲走建立航迹" : "无定位锚点：盲走等待定位（持续失联 20 周期将收工）");
+                    }
+                    else
+                    {
+                        plan = WalkNavigator.Decide(course, bearing, dist, arrivePx, stuck, recovery, rng);
+                    }
                     switch (plan.Phase)
                     {
                         case WalkPhase.Arrived:
@@ -247,7 +258,12 @@ public static class AutorunWalkCommand
                             InputService.HoldKeys(new[] { fwd }, 600);
                             break;
                     }
-                    if (plan.Phase is WalkPhase.Arrived or WalkPhase.GiveUp) break;
+                    if (plan.Phase is WalkPhase.Arrived or WalkPhase.GiveUp)
+                    {
+                        jsonl.WriteLine(J(cycles, px, py, course, plan.Phase.ToString().ToLowerInvariant(), diff,
+                            $"{plan.Note} dist={dist:F0}px"));
+                        break;
+                    }
 
                     jsonl.WriteLine(J(cycles, px, py, course, plan.Phase.ToString().ToLowerInvariant(), diff,
                         $"{plan.Note} dist={dist:F0}px ai={aiNote}"));
