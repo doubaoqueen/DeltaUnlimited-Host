@@ -96,8 +96,20 @@ public static class WalkNavigator
     /// <summary>冲刺距离（底图像素）：比这远就冲刺，近了改普通走（防冲过头）。</summary>
     public const double SprintDistPx = 2000.0;
 
-    /// <summary>建立航迹的最小位移（px）：两帧位移小于此值视为无有效航迹（原地挪动不算数）。</summary>
+    /// <summary>建立航迹的最小位移（px，相对航迹锚点而非相邻两帧）：零号大坝整图 4096px，
+    /// 走一步只挪 ~2px，相邻帧比较永远凑不齐门槛（首跑实测踩过）——锚点基线才是比例尺适配的比法。</summary>
     public const double MinTrackDispPx = 8.0;
+
+    /// <summary>贴墙判据（进度版）：连续走 WallStuckCycles 个周期、地图位移仍 &lt; 此值 = 抵墙。
+    /// 帧差判据在"抵墙走"时会失明（视角晃动给 6-8 差分）——位移不撒谎。</summary>
+    public const double WallStuckDispPx = 15.0;
+
+    /// <summary>贴墙判据需要的连续前进周期数。</summary>
+    public const int WallStuckCycles = 4;
+
+    /// <summary>进度版贴墙判定：连续走了 n 个周期但地图位移不足 → 抵墙。</summary>
+    public static bool IsWallStuck(int walkCycles, double dispPx)
+        => walkCycles >= WallStuckCycles && dispPx < WallStuckDispPx;
 
     public static WalkPlan Decide(
         double? courseDeg, double goalBearingDeg, double distPx, double arrivePx,

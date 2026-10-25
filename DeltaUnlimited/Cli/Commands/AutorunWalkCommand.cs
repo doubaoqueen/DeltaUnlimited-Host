@@ -96,6 +96,9 @@ public static class AutorunWalkCommand
         int lowDiffRun = 0, locMissRun = 0, recoveries = 0, cycles = 0;
         bool awaitingEscape = false;          // 脱困后待验证：走出 40px = 成功；再次卡死 = 失败（翻边）
         double escX = 0, escY = 0;
+        (double x, double y)? courseAnchor = null;   // 航迹锚点：走出去 ≥8px 才算一次航向（比例尺适配）
+        int walkRun = 0;                    // 连续前进周期数（进度版贴墙判据用）
+        (double x, double y)? walkStart = null;      // 本轮连续前进的起点
         string outcome = "未知";
         double startDist = -1;
 
@@ -164,14 +167,25 @@ public static class AutorunWalkCommand
                         Console.WriteLine($"  ✅ 首锚成功：map_px ({first.CenterX:F0},{first.CenterY:F0}) 分数 {first.Score:F2}");
                     if (locMissRun >= 20) { outcome = "定位失联（20 周期无有效位置）"; break; }
 
+                    // 航迹（锚点基线）：与上次判向点比位移，≥8px 才产出一个航向值。
+                    // 不比相邻两帧——整图 4096px 下一步行只挪 ~2px，相邻比法永远判不出航向（首跑实测）。
                     double? course = null;
-                    if (positions.Count >= 2)
+                    if (positions.Count > 0)
                     {
-                        var (x0, y0, _) = positions[^2];
-                        var (x1, y1, _) = positions[^1];
-                        double dx = x1 - x0, dy = y1 - y0;
-                        if (Math.Sqrt(dx * dx + dy * dy) >= WalkNavigator.MinTrackDispPx)
-                            course = NavMath.CourseDeg(dx, dy);
+                        var (nx, ny, _) = positions[^1];
+                        if (courseAnchor is { } anc)
+                        {
+                            double ddx = nx - anc.x, ddy = ny - anc.y;
+                            if (Math.Sqrt(ddx * ddx + ddy * ddy) >= WalkNavigator.MinTrackDispPx)
+                            {
+                                course = NavMath.CourseDeg(ddx, ddy);
+                                courseAnchor = (nx, ny);
+                            }
+                        }
+                        else
+                        {
+                            courseAnchor = (nx, ny);   // 首个锚点只立不判
+                        }
                     }
 
                     // 帧差（卡死判据）：转向帧天然高差，前进帧差低 = 被挡
@@ -188,6 +202,14 @@ public static class AutorunWalkCommand
                     bool walkedRecently = positions.Count >= 2;
                     if (diff < 4.0 && walkedRecently) lowDiffRun++; else lowDiffRun = 0;
                     bool stuck = lowDiffRun >= 3;
+
+                    // 进度版贴墙：连续前进 4 周期、地图位移 <15px = 抵墙（帧差对"抵墙走"失明，位移不撒谎）
+                    if (walkRun > 0 && positions.Count > 0 && walkStart is { } ws)
+                    {
+                        var (nx, ny, _) = positions[^1];
+                        double wdisp = Math.Sqrt(Math.Pow(nx - ws.x, 2) + Math.Pow(ny - ws.y, 2));
+                        if (WalkNavigator.IsWallStuck(walkRun, wdisp)) stuck = true;
+                    }
 
                     // 脱困效果裁决（先于决策，让策略状态最新）：再次卡死=失败翻边；走出40px=成功沿用边
                     if (awaitingEscape)
@@ -239,6 +261,7 @@ public static class AutorunWalkCommand
                             TurnByDeg(turnDeg, runtime.PxPer90Deg);
                             if (positions.Count > 0) (escX, escY, _) = positions[^1];
                             awaitingEscape = true;
+                            walkRun = 0; walkStart = null;             // 脱困打断前进链
                             jsonl.WriteLine(J(cycles, px, py, course, "recover", diff, $"{plan.Note} back={backMs}ms turn={turnDeg}°"));
                             lowDiffRun = 0;
                             continue;   // 脱困周期直接进入下轮感知，不前进
@@ -246,16 +269,21 @@ public static class AutorunWalkCommand
                         case WalkPhase.Turn:
                             InputService.ReleaseAllHeldKeys();
                             TurnByDeg(plan.TurnDx, runtime.PxPer90Deg);
+                            walkRun = 0; walkStart = null;             // 转向打断前进链
                             break;
                         case WalkPhase.Walk:
                         {
                             int walkMs = 500 + rng.Next(0, 400);
                             InputService.HoldKeys(
                                 plan.Sprint ? new[] { fwd, sprintK } : new[] { fwd }, walkMs);
+                            walkRun++;
+                            walkStart ??= (positions.Count > 0 ? (positions[^1].x, positions[^1].y) : ((double)0, 0));
                             break;
                         }
                         case WalkPhase.Explore:
                             InputService.HoldKeys(new[] { fwd }, 600);
+                            walkRun++;                                   // 探索步也算前进（贴墙判据同适用）
+                            walkStart ??= (positions.Count > 0 ? (positions[^1].x, positions[^1].y) : ((double)0, 0));
                             break;
                     }
                     if (plan.Phase is WalkPhase.Arrived or WalkPhase.GiveUp)
