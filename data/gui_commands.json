@@ -1,0 +1,243 @@
+{
+  "schema_version": 1,
+  "groups": [
+    { "id": "diag", "title": "基础诊断（只读，不动键鼠）" },
+    { "id": "input", "title": "输入与靶场（会动键鼠，游戏须在前台）" },
+    { "id": "auto", "title": "局内自动化（长任务 · 可急停）" },
+    { "id": "ai", "title": "AI 数据与探针" },
+    { "id": "tools", "title": "窗口与标注工具（开独立窗口）" }
+  ],
+  "commands": [
+    {
+      "verb": "smoke", "group": "diag",
+      "desc": "数据层冒烟：校验全部 JSON 表能加载、schema 没改坏。",
+      "note": "改完配置文件先跑这个，30 秒确认没改坏。",
+      "args": []
+    },
+    {
+      "verb": "windows", "group": "diag",
+      "desc": "列出当前可见窗口的标题——找窗口关键字用。",
+      "args": []
+    },
+    {
+      "verb": "capture", "group": "diag",
+      "desc": "截一张游戏画面存到 screenshots/captured/（标定/诊断的第一步）。",
+      "args": [
+        { "name": "窗口标题关键字", "desc": "留空=用 runtime.json 的关键字（三角洲行动）", "default": "", "kind": "arg" },
+        { "name": "文件名", "desc": "留空=自动按时间命名", "default": "", "kind": "arg" }
+      ]
+    },
+    {
+      "verb": "annotate", "group": "diag",
+      "desc": "对某个元素跑一次完整识别并画框，验证 screens/elements 标记是否标对。",
+      "args": [
+        { "name": "元素名", "desc": "elements.json 里的元素名", "default": "", "kind": "arg", "required": true },
+        { "name": "截图路径", "desc": "留空=现场截游戏画面", "default": "", "kind": "arg" }
+      ]
+    },
+    {
+      "verb": "ocr", "group": "diag",
+      "desc": "OCR 诊断：列出识别到的全部词 + 关键词严格/候选匹配结果。",
+      "note": "调界面标记前先看它实际读成什么字（读错是常态）。",
+      "args": [
+        { "name": "截图路径", "desc": "要识别的图片", "default": "", "kind": "arg", "required": true },
+        { "name": "关键词", "desc": "多个用空格隔开", "default": "", "kind": "arg" },
+        { "name": "region", "desc": "只识别该区域：x y w h", "default": "", "kind": "flag" }
+      ]
+    },
+    {
+      "verb": "tplprobe", "group": "diag",
+      "desc": "模板匹配诊断（静态）：对一张截图匹配一个模板，报置信度和位置。",
+      "args": [
+        { "name": "截图路径", "desc": "被搜索的图", "default": "", "kind": "arg", "required": true },
+        { "name": "模板路径", "desc": "assets 下的模板小图", "default": "", "kind": "arg", "required": true },
+        { "name": "阈值", "desc": "合格线", "default": "0.80", "kind": "arg" }
+      ]
+    },
+    {
+      "verb": "tplprobe", "group": "diag",
+      "desc": "模板匹配诊断（实时）：对游戏窗口逐帧匹配，实机验证模板用。",
+      "note": "游戏开着时用；停止按钮随时可停。",
+      "fixedArgs": ["--live"],
+      "args": [
+        { "name": "模板路径", "desc": "assets 下的模板小图", "default": "", "kind": "arg", "required": true },
+        { "name": "阈值", "desc": "合格线", "default": "0.80", "kind": "arg" },
+        { "name": "区域", "desc": "只在区域内找：x y w h（留空=全屏找）", "default": "", "kind": "flag" }
+      ]
+    },
+    {
+      "verb": "crop", "group": "diag",
+      "desc": "从一张截图裁出模板小图（可缩放换算设计分辨率）。",
+      "args": [
+        { "name": "x", "desc": "左上角 x", "default": "", "kind": "arg", "required": true },
+        { "name": "y", "desc": "左上角 y", "default": "", "kind": "arg", "required": true },
+        { "name": "w", "desc": "宽", "default": "", "kind": "arg", "required": true },
+        { "name": "h", "desc": "高", "default": "", "kind": "arg", "required": true },
+        { "name": "源图路径", "desc": "从哪张截图裁", "default": "", "kind": "arg", "required": true },
+        { "name": "输出路径", "desc": "留空=自动命名", "default": "", "kind": "arg" },
+        { "name": "缩放", "desc": "留空=原尺寸", "default": "", "kind": "arg" }
+      ]
+    },
+    {
+      "verb": "aieval", "group": "diag",
+      "desc": "AI 离线评估：金标集跑混淆矩阵 + macro-F1（上线门禁的离线版）。",
+      "args": [
+        { "name": "模型 onnx", "desc": "留空=当前配置的模型", "default": "", "kind": "arg" },
+        { "name": "数据集目录", "desc": "留空=金标集", "default": "", "kind": "arg" }
+      ]
+    },
+    {
+      "verb": "localize", "group": "diag",
+      "desc": "单帧定位诊断：地形匹配算出玩家位置（小地图 ↔ 官方底图）。",
+      "args": [
+        { "name": "截图路径", "desc": "留空=实时截游戏画面", "default": "", "kind": "arg" },
+        { "name": "map", "desc": "底图相对路径（留空=默认零号大坝）", "default": "", "kind": "flag" },
+        { "name": "scales", "desc": "尺度列表，逗号分隔（如 150,180,210）", "default": "", "kind": "flag" },
+        { "name": "topk", "desc": "候选数", "default": "3", "kind": "flag" },
+        { "name": "minscore", "desc": "最低分阈值", "default": "", "kind": "flag" },
+        { "name": "prior", "desc": "先验搜索中心 x,y（实时化提速）", "default": "", "kind": "flag" }
+      ]
+    },
+    {
+      "verb": "localizetrack", "group": "diag",
+      "desc": "连续定位轨迹：按采集时间回放一段素材，输出逐帧定位轨迹。",
+      "note": "时间是 record_manifest.csv 里的 created 口径。",
+      "args": [
+        { "name": "起始时间", "desc": "如 2026-10-12 00:28:20", "default": "", "kind": "argq", "required": true },
+        { "name": "结束时间", "desc": "同上格式", "default": "", "kind": "argq", "required": true },
+        { "name": "maxspeed", "desc": "速度门（m/s），超速判拒绝", "default": "30", "kind": "flag" },
+        { "name": "map", "desc": "底图相对路径", "default": "", "kind": "flag" },
+        { "name": "scales", "desc": "尺度列表，逗号分隔", "default": "", "kind": "flag" }
+      ]
+    },
+    {
+      "verb": "click", "group": "input", "exclusive": true,
+      "desc": "真实点击一个元素（点前/点后自动截图，默认 3 秒倒计时给你准备）。",
+      "note": "会动鼠标——别在链路运行时调它。",
+      "args": [
+        { "name": "元素名", "desc": "elements.json 里的元素名", "default": "", "kind": "arg", "required": true },
+        { "name": "窗口关键字", "desc": "留空=默认", "default": "", "kind": "arg" }
+      ]
+    },
+    {
+      "verb": "clickat", "group": "input", "exclusive": true,
+      "desc": "对屏幕绝对坐标做一次拟人化点击（带落点校验安全网）。",
+      "note": "调试用；日常点击请用 click（走元素定位）。",
+      "args": [
+        { "name": "x", "desc": "屏幕坐标 x", "default": "", "kind": "arg", "required": true },
+        { "name": "y", "desc": "屏幕坐标 y", "default": "", "kind": "arg", "required": true }
+      ]
+    },
+    {
+      "verb": "mousetest", "group": "input", "exclusive": true,
+      "desc": "拟人轨迹移动到屏幕坐标（不点击）——肉眼验收贝塞尔轨迹效果，可多次运行看随机性。",
+      "args": [
+        { "name": "x", "desc": "屏幕坐标 x", "default": "", "kind": "arg", "required": true },
+        { "name": "y", "desc": "屏幕坐标 y", "default": "", "kind": "arg", "required": true }
+      ]
+    },
+    {
+      "verb": "click_operator", "group": "input", "exclusive": true,
+      "desc": "自动选干员：定位类型标签（间距推算）并点击对应头像。",
+      "args": [
+        { "name": "类型", "desc": "突击 / 支援 / 工程 / 侦察", "default": "", "kind": "arg", "required": true },
+        { "name": "序号", "desc": "该类型下第几个（0 起）", "default": "", "kind": "arg", "required": true }
+      ]
+    },
+    {
+      "verb": "hold", "group": "input", "exclusive": true,
+      "desc": "长按一个语义键 N 毫秒（帧差验证按没按上）。",
+      "args": [
+        { "name": "键名", "desc": "语义键（查 game_ops.json，如 move_forward）", "default": "", "kind": "arg", "required": true },
+        { "name": "毫秒", "desc": "长按时长", "default": "", "kind": "arg", "required": true },
+        { "name": "窗口关键字", "desc": "留空=默认", "default": "", "kind": "arg" }
+      ]
+    },
+    {
+      "verb": "turn", "group": "input", "exclusive": true,
+      "desc": "视角转动测试——转向灵敏度标定就靠它（数几次能回原方向）。",
+      "args": [
+        { "name": "dx", "desc": "水平移动像素（如 1000）", "default": "", "kind": "arg", "required": true },
+        { "name": "dy", "desc": "垂直像素（一般留空）", "default": "", "kind": "arg" },
+        { "name": "窗口关键字", "desc": "留空=默认", "default": "", "kind": "arg" }
+      ]
+    },
+    {
+      "verb": "drill", "group": "input", "exclusive": true,
+      "desc": "靶场自主行进循环（帧差确认 + 自动重试 + 急停）。",
+      "args": [
+        { "name": "圈数", "desc": "留空=默认", "default": "", "kind": "arg" },
+        { "name": "窗口关键字", "desc": "留空=默认", "default": "", "kind": "arg" }
+      ]
+    },
+    {
+      "verb": "patrol", "group": "auto", "exclusive": true,
+      "desc": "反应式巡逻 v2：贴墙停 + 横移低效双守卫，自动转向（局内自动化前身实验）。",
+      "note": "长任务；停止按钮随时可停（释放所有按键）。人必须在场。",
+      "args": [
+        { "name": "秒数", "desc": "留空=默认", "default": "", "kind": "arg" },
+        { "name": "帧差阈值", "desc": "留空=默认", "default": "", "kind": "arg" },
+        { "name": "连续次数", "desc": "留空=默认", "default": "", "kind": "arg" },
+        { "name": "90°像素", "desc": "留空=标定值", "default": "", "kind": "arg" },
+        { "name": "窗口关键字", "desc": "留空=默认", "default": "", "kind": "arg" }
+      ]
+    },
+    {
+      "verb": "autorun_walk", "group": "auto", "exclusive": true,
+      "desc": "自动跑图实验 v1：定位 → 方位伺服 → 撞墙「倒车请注意」脱困；轨迹与回放图落盘 logs/autorun/。",
+      "note": "人盯实验、急停常备；会话限额执法中（每日 240 分钟）。侦察周请多跑几局收轨迹。",
+      "args": [
+        { "name": "extract", "desc": "目标撤离点（默认 E2）", "default": "E2", "kind": "flag" },
+        { "name": "minutes", "desc": "最长跑几分钟", "default": "10", "kind": "flag" },
+        { "name": "arrive-px", "desc": "到达判定半径（px）", "default": "250", "kind": "flag" }
+      ]
+    },
+    {
+      "verb": "airecord", "group": "ai", "exclusive": true,
+      "desc": "素材录制器：零按键录制——正常打游戏，1-2 秒随机存一帧全帧。",
+      "note": "长任务。停止按钮=安全落盘退出。游戏素材不出库。",
+      "args": [
+        { "name": "map", "desc": "地图标注", "default": "零号大坝", "kind": "flag" },
+        { "name": "season", "desc": "赛季标注", "default": "unknown", "kind": "flag" },
+        { "name": "interval", "desc": "固定间隔毫秒（留空=1-2 秒随机）", "default": "", "kind": "flag" },
+        { "name": "max-gb", "desc": "磁盘上限 GB", "default": "50", "kind": "flag" }
+      ]
+    },
+    {
+      "verb": "aicollect", "group": "ai", "exclusive": true,
+      "desc": "可通行性数据采集：你来玩，按 1/2/0/b 实时打标。",
+      "note": "采集/标注分离前的老流程；一般用 airecord + ailabel。",
+      "args": [
+        { "name": "map", "desc": "地图标注", "default": "零号大坝", "kind": "flag" },
+        { "name": "season", "desc": "赛季标注", "default": "unknown", "kind": "flag" }
+      ]
+    },
+    {
+      "verb": "aiprobe", "group": "ai",
+      "desc": "AI 探针：无参=实时对游戏画面逐帧显示可通行性判定；传图=静态判定。",
+      "note": "observe-only，只看不动。",
+      "args": [
+        { "name": "图片路径", "desc": "留空=实时模式", "default": "", "kind": "arg" },
+        { "name": "model", "desc": "模型 onnx 相对路径（留空=当前配置）", "default": "", "kind": "flag" }
+      ]
+    },
+    {
+      "verb": "ailabel", "group": "tools",
+      "desc": "素材标注器（图形窗口）：A/S/D/F 打标、←/→ 翻页、G 跳任意帧；右侧显示 VLM 初筛参考。",
+      "note": "开独立窗口——用完请关掉，否则会锁住 exe 影响重新编译。",
+      "args": [
+        { "name": "start", "desc": "unlabeled / first / 行号", "default": "", "kind": "flag" },
+        { "name": "only-usable", "desc": "只显示 VLM 判可用的帧", "default": "", "kind": "switch" },
+        { "name": "gold-first", "desc": "金帧排前", "default": "", "kind": "switch" }
+      ]
+    },
+    {
+      "verb": "roitune", "group": "tools",
+      "desc": "ROI 绿框调参器：实时对着游戏画面移动/缩放可通行性识别框，回车保存。",
+      "note": "开独立窗口；需要游戏窗口已开（或传一张截图走静态模式）。用完请关。",
+      "args": [
+        { "name": "截图路径", "desc": "留空=实时模式", "default": "", "kind": "arg" }
+      ]
+    }
+  ]
+}

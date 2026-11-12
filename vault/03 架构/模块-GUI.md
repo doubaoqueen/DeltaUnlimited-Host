@@ -20,6 +20,7 @@ CLI 的问题是：跑一次链路要开终端、敲命令、盯着一屏文字�
 | 不用记命令 | 工作流下拉框自动扫 `workflows/*.json`；模式下拉框只有"半自动/全自动"两项 |
 | 急停要顺手 | 一个红色 ⛔ 急停按钮，和 Ctrl+C、暂停面板的"中止"**三路同源**（都走 `CommandUtil.RequestStop`） |
 | 出问题要看得到 | 日志窗实时滚 + 托盘气泡通知（链路完成/停止/失败） |
+| 命令不用开 cmd 敲 | **命令台**（G3，2026-11-13）：24 个 CLI 动词分 5 组，选命令 → 填参数 → 点运行；输出进同一个日志窗 |
 
 ## 2. 启动流程（`Gui/GuiApp.cs`）
 
@@ -53,6 +54,21 @@ px_per_90deg <= 0 → 打印未标定警告
 - **点击急停**：`CommandUtil.RequestStop()` → 置标志 + `ReleaseAllHeldKeys()` + 打断暂停闸门。链路线程会在下一个步骤边界/轮询点看到标志，抛 `ChainStoppedException` 收尾（[[模块-chain引擎]]）。
 - **关窗口**：默认**不退出**，收进托盘（`e.Cancel = true`）。真退出只能走托盘菜单"退出"——退出时会请求急停并**等链路线程最多 2 秒**收尾，避免按键释放存在竞态窗口（`MainForm.cs:297-320`）。
 - **记住窗口位置**：只有正常态（非最大化/最小化）才写回坐标；下次启动会校验"尺寸 ≥ 最小尺寸 且 与某块屏幕工作区相交"，否则回退默认居中（`MainForm.cs:101-115`）。
+
+### 3.1 命令台（G3，2026-11-13 落地）
+
+把"每次要开 cmd 敲 `dotnet run -- xxx`"搬进面板——用户原话：**"我是作者我知道这些句子是运行什么的，别人想用就不知道了"**，所以命令台按**功能分组 + 人话说明 + 参数表单**呈现，而不是裸命令：
+
+| 设计 | 内容 |
+|---|---|
+| 数据驱动 | `data/gui_commands.json`：24 个动词分 5 组（基础诊断 / 输入与靶场 / 局内自动化 / AI 数据与探针 / 窗口与标注工具），每条带人话说明、参数表（arg / argq / flag / switch 四种）、风险标注（`exclusive` = 会动键鼠） |
+| 单一事实来源 | `Program.cs` 的 switch 抽成 `CliDispatcher.Dispatch` + `KnownVerbs`（26 动词），CLI 入口与 GUI 命令台共用；测试钉住"目录动词 ⊆ KnownVerbs"与 26 动词清单 |
+| 进程内执行 | 命令在后台 Task 上跑（与链路同款），输出经 ConsoleRelay 进日志窗；停止走 `RequestStop` **协作式急停——按键一定被释放**，不杀进程 |
+| 互斥规则 | 开始链路 ↔ 运行命令互斥（共用急停标志与键鼠）；exclusive 命令在链路运行期间禁用；非独占诊断（ocr/capture/aieval 等）可在链路运行时调（停止会同时急停链路，状态栏有提示） |
+| 预览即所跑 | 参数表单动态生成，底部命令行预览实时更新——顺便教人命令行长什么样 |
+| 排除项 | `chain`（顶栏专属入口）、`gui`（面板自身）、`overlay`（常驻无急停检查点，进程内不可停止，仍走 CLI） |
+
+实现：`Gui/CommandCatalog.cs`（加载/校验/BuildArgs/BuildPreview 纯函数）+ `Data/GuiCommandModels.cs` + `MainForm.BuildCommandPanel()`；测试 `CommandCatalogTests`（9 条，257 全绿）。tag v0.6.1。
 
 ## 4. 暂停点是怎么连起来的
 
@@ -100,7 +116,7 @@ GUI：MainForm 构造时 CommandUtil.PauseHandler = PauseGate.Wait
 | | CLI | GUI |
 |---|---|---|
 | 定位 | 诊断后门 / 标定工具 / 批处理 | 日常使用入口 |
-| 命令 | 26 个动词（[[工具-CLI命令速查]]） | 只有"跑哪条链路 + 半自动/全自动" |
+| 命令 | 26 个动词（[[工具-CLI命令速查]]） | 链路（顶栏）+ 命令台 24 动词（G3：分组/参数表单/预览） |
 | 输出 | 控制台 + 日志文件 | 日志窗（同一份日志，经 ConsoleRelay 分流） |
 | 急停 | Ctrl+C | 按钮 / Ctrl+C / 暂停面板中止 |
 | 共用 | 截屏、识别、输入、数据、链路、急停、暂停闸门、OCR、AI 感知 | 同左 |
@@ -127,5 +143,6 @@ GUI：MainForm 构造时 CommandUtil.PauseHandler = PauseGate.Wait
 - 代码：`DeltaUnlimited/Cli/CommandUtil.cs:10-29`（StopRequested / RequestStop / AbortIfStopped）、`41-64`（WaitForResume）、`73-114`（PauseGate）
 - 代码：`DeltaUnlimited/Cli/Commands/OverlayCommand.cs:11-58`（等待窗口 / 日志尾部 / 500ms 刷新）
 - 代码：`DeltaUnlimited/Data/GuiSettingsModels.cs`、`Data/DataStore.cs:60-73, 92-96`
-- 数据：`data/gui_settings.json`
+- 代码：`DeltaUnlimited/Gui/CommandCatalog.cs`、`Data/GuiCommandModels.cs`、`Cli/CliDispatcher.cs`（G3 命令台三件套）
+- 数据：`data/gui_commands.json`（命令台目录）、`data/gui_settings.json`
 - 文档：`docs/模块说明.md` §7（可观测层）、§14（图形控制面板：文件职责与设计要点）；`README.md`（GUI 能力与待办）

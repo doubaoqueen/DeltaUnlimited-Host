@@ -1,6 +1,5 @@
 using System.Reflection;
 using DeltaUnlimited.Cli;
-using DeltaUnlimited.Cli.Commands;
 using DeltaUnlimited.Data;
 using DeltaUnlimited.Gui;
 using DeltaUnlimited.Input;
@@ -40,36 +39,7 @@ if (runtime.PxPer90Deg <= 0)
 
 try
 {
-    switch (command)
-    {
-        case "smoke": SmokeCommand.Run(store); break;
-        case "annotate": AnnotateCommand.Run(store, root, args); break;
-        case "capture": CaptureCommand.Run(root, args); break;
-        case "click": ClickCommand.Run(store, root, args); break;
-        case "hold": HoldCommand.Run(store, root, args); break;
-        case "turn": TurnCommand.Run(root, args); break;
-        case "drill": DrillCommand.Run(store, root, args); break;
-        case "patrol": PatrolCommand.Run(store, root, args); break;
-        case "aicollect": AiCollectCommand.Run(store, root, args); break;
-        case "airecord": AiRecordCommand.Run(store, root, args); break;
-        case "ailabel": AiLabelCommand.Run(store, root, args); break;
-        case "roitune": RoiTuneCommand.Run(store, root, args); break;
-        case "aiprobe": AiProbeCommand.Run(store, root, args); break;
-        case "autorun_walk": AutorunWalkCommand.Run(store, root, args); break;
-        case "aieval": AiEvalCommand.Run(store, root, args); break;
-        case "chain": ChainCommand.Run(store, root, args); break;
-        case "crop": CropCommand.Run(root, args); break;
-        case "ocr": OcrProbeCommand.Run(root, args); break;
-        case "tplprobe": TplProbeCommand.Run(root, args); break;
-        case "localize": LocalizeCommand.Run(root, args); break;
-        case "localizetrack": LocalizeTrackCommand.Run(root, args); break;
-        case "overlay": OverlayCommand.Run(store, root); break;
-        case "mousetest": MouseTestCommand.Run(args); break;
-        case "clickat": ClickAtCommand.Run(args); break;
-        case "click_operator": OperatorPickCommand.Run(store, root, args); break;
-        case "windows": WindowsCommand.Run(); break;
-        default: Usage.Print(); break;
-    }
+    CliDispatcher.Dispatch(command, store, root, args);
 }
 catch (Exception ex)
 {
