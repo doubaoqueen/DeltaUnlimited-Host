@@ -41,7 +41,8 @@ docs/                 项目大纲/模块说明/跑刀方案/导航设计/AI初�
 
 ```
 dotnet build                # 仓库根（经 DeltaUnlimited.slnx；或 dotnet build DeltaUnlimited/DeltaUnlimited.csproj）
-dotnet test tests\DU.Tests  # 单元测试（93 用例）
+dotnet test tests\DU.Tests  # 单元测试（257 用例）
+dotnet publish DeltaUnlimited\DeltaUnlimited.csproj -c Release -r win-x64 --self-contained false -p:OutputType=WinExe -o release   # 日常双击版（GUI 子系统，双击无黑窗）→ release\DeltaUnlimited.exe
 ```
 
 ## CLI 命令速览
@@ -52,7 +53,7 @@ dotnet test tests\DU.Tests  # 单元测试（93 用例）
 > - 或先 `cd DeltaUnlimited`，再 `dotnet run -- <命令>`（下面示例用简写）
 
 ```
-dotnet run -- gui                       # 图形控制面板（无参数/双击 exe 同）
+dotnet run -- gui                       # 图形控制面板（日常双击入口 = release\DeltaUnlimited.exe，WinExe 发布版，双击无黑窗）
 dotnet run -- chain enter_match.json    # 进场链路 v7（任意界面启动，--auto 全自动）
 dotnet run -- capture [关键字]          # 截屏冒烟
 dotnet run -- ocr <截图> [--region x y w h] [关键词...]   # OCR 诊断（词表+关键词验证）
@@ -87,4 +88,4 @@ dotnet run -- aieval                    # 三分类评估（金标集门禁，�
 
 ## 版本
 
-当前 **v0.6.1**（csproj `<Version>` 维护，启动时打印）。变更历史见 git log。
+当前 **v0.6.2**（csproj `<Version>` 维护，启动时打印）。变更历史见 git log。

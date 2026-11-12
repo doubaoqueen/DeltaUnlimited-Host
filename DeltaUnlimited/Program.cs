@@ -25,6 +25,9 @@ if (command == "gui")
     return;
 }
 
+// WinExe 发布版从 cmd 调起 CLI 时没有控制台——先接回父控制台，输出才可见（Exe 开发构建无害）
+ConsoleAttach.TryAttachParent();
+
 Console.WriteLine($"DeltaUnlimited v{version}（开发期 CLI）");
 
 // CLI：注入拟人化参数 + 初始化 OCR 引擎（runtime.json 的 ocr_engine 可切换：windows 主 / paddle 待门控失败后接入）

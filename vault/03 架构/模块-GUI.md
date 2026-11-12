@@ -70,6 +70,9 @@ px_per_90deg <= 0 → 打印未标定警告
 
 实现：`Gui/CommandCatalog.cs`（加载/校验/BuildArgs/BuildPreview 纯函数）+ `Data/GuiCommandModels.cs` + `MainForm.BuildCommandPanel()`；测试 `CommandCatalogTests`（9 条，257 全绿）。tag v0.6.1。
 
+> [!warning] 双击黑窗残留（v0.6.2 根治，同日）
+> v0.6.1 双击 exe 会在 Win11（默认终端 = Windows Terminal）下**残留黑窗**：exe 是控制台子系统（PE 子系统 3），OS 给它配终端；`FreeConsole()` 能让 conhost 关窗（09-26 修复原理），但 **WT 宿主窗不跟关**。根治 = 日常双击用 **WinExe 发布版**（`release\DeltaUnlimited.exe`，PE 子系统 2，OS 从不分配控制台）；CLI 仍走 `dotnet run`，发布 exe 从 cmd 调 CLI 用 `AttachConsole` 接回父控制台（`Cli/ConsoleAttach.cs`）。详见 [[坑-双击exe黑窗残留]]。
+
 ## 4. 暂停点是怎么连起来的
 
 半自动模式下 chain 里的 `pause` / `mark_unknown` 会调 `CommandUtil.WaitForResume(message)`：
