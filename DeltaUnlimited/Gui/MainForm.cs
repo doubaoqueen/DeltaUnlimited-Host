@@ -80,8 +80,8 @@ public sealed class MainForm : Form
             ReadOnly = true,
             ScrollBars = ScrollBars.Vertical,
             Font = new Font("Consolas", 9f),
-            BackColor = Color.FromArgb(18, 22, 28),
-            ForeColor = Color.FromArgb(208, 212, 220),
+            BackColor = Color.FromArgb(24, 28, 34),
+            ForeColor = Color.FromArgb(228, 231, 236),
             BorderStyle = BorderStyle.None,
         };
         Controls.Add(_logBox);
@@ -310,7 +310,7 @@ public sealed class MainForm : Form
     private Panel BuildCommandPanel()
     {
         var f = new Font(Font.FontFamily, 10f);
-        var panel = new Panel { Dock = DockStyle.Top, Height = 244, BackColor = Color.FromArgb(24, 28, 34), Padding = new Padding(10, 4, 10, 6) };
+        var panel = new Panel { Dock = DockStyle.Top, Height = 244, BackColor = Color.FromArgb(248, 249, 251), Padding = new Padding(10, 4, 10, 6) };
         var grid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Margin = new Padding(0) };
         grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
         grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
@@ -318,8 +318,8 @@ public sealed class MainForm : Form
         grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
 
         // r0：标题 + 分类 + 命令 + 运行/停止（默认分类先于事件接线设置，避免链式触发时字段未就绪）
-        var row0 = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = new Padding(0) };
-        row0.Controls.Add(new Label { Text = "命令台", AutoSize = true, Margin = new Padding(0, 9, 12, 0), Font = new Font(Font.FontFamily, 11f, FontStyle.Bold), ForeColor = Color.FromArgb(140, 200, 150) });
+        var row0 = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = new Padding(0), BackColor = Color.FromArgb(248, 249, 251) };
+        row0.Controls.Add(new Label { Text = "命令台", AutoSize = true, Margin = new Padding(0, 9, 12, 0), Font = new Font(Font.FontFamily, 11f, FontStyle.Bold), ForeColor = Color.FromArgb(0, 106, 74) });
         row0.Controls.Add(new Label { Text = "分类", AutoSize = true, Margin = new Padding(0, 10, 6, 0), Font = f });
         _cmdGroupBox = new ComboBox { Width = 230, DropDownStyle = ComboBoxStyle.DropDownList, Font = f };
         foreach (var g in _cmdCatalog.Groups) _cmdGroupBox.Items.Add(g.Title);
@@ -338,16 +338,16 @@ public sealed class MainForm : Form
         row0.Controls.Add(_cmdStopButton);
         grid.Controls.Add(row0, 0, 0);
 
-        // r1：说明（人话描述 + 用法提示 + 风险警示）
-        _cmdDescBox = new TextBox { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, BackColor = Color.FromArgb(30, 35, 43), ForeColor = Color.FromArgb(176, 184, 196), BorderStyle = BorderStyle.None, Font = new Font("Microsoft YaHei UI", 9f) };
+        // r1：说明（人话描述 + 用法提示 + 风险警示）——浅底深字，看得清优先
+        _cmdDescBox = new TextBox { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, BackColor = Color.FromArgb(255, 255, 255), ForeColor = Color.FromArgb(52, 58, 64), BorderStyle = BorderStyle.FixedSingle, Font = new Font("Microsoft YaHei UI", 9.75f) };
         grid.Controls.Add(_cmdDescBox, 0, 1);
 
         // r2：参数表单（按所选命令动态生成）
-        _cmdArgsPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true, AutoScroll = true, BorderStyle = BorderStyle.FixedSingle, BackColor = Color.FromArgb(30, 35, 43) };
+        _cmdArgsPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true, AutoScroll = true, BorderStyle = BorderStyle.FixedSingle, BackColor = Color.FromArgb(255, 255, 255) };
         grid.Controls.Add(_cmdArgsPanel, 0, 2);
 
         // r3：命令行预览——预览的就是会跑的
-        _cmdPreviewBox = new TextBox { Dock = DockStyle.Fill, ReadOnly = true, Font = new Font("Consolas", 9f), BackColor = Color.FromArgb(18, 22, 28), ForeColor = Color.FromArgb(126, 200, 148), BorderStyle = BorderStyle.FixedSingle };
+        _cmdPreviewBox = new TextBox { Dock = DockStyle.Fill, ReadOnly = true, Font = new Font("Consolas", 9.75f), BackColor = Color.FromArgb(250, 251, 252), ForeColor = Color.FromArgb(0, 106, 78), BorderStyle = BorderStyle.FixedSingle };
         grid.Controls.Add(_cmdPreviewBox, 0, 3);
 
         panel.Controls.Add(grid);
@@ -390,7 +390,7 @@ public sealed class MainForm : Form
         {
             if (a.Kind == "switch")
             {
-                var ck = new CheckBox { Text = "--" + a.Name, AutoSize = true, Margin = new Padding(4, 10, 12, 0), Font = new Font(Font.FontFamily, 9f) };
+                var ck = new CheckBox { Text = "--" + a.Name, AutoSize = true, Margin = new Padding(4, 10, 12, 0), Font = new Font(Font.FontFamily, 9.75f), ForeColor = Color.FromArgb(52, 58, 64) };
                 ck.CheckedChanged += (_, _) => UpdateCmdPreview();
                 _cmdTips.SetToolTip(ck, a.Desc);
                 _cmdArgsPanel.Controls.Add(ck);
@@ -398,8 +398,8 @@ public sealed class MainForm : Form
             else
             {
                 string label = (a.Kind == "flag" ? "--" : "") + a.Name + (a.Required ? "*" : "");
-                var lb = new Label { Text = label, AutoSize = true, Margin = new Padding(4, 9, 4, 0), Font = new Font(Font.FontFamily, 9f) };
-                var tb = new TextBox { Width = 150, PlaceholderText = a.Default, Margin = new Padding(0, 6, 0, 0), Font = new Font(Font.FontFamily, 9f) };
+                var lb = new Label { Text = label, AutoSize = true, Margin = new Padding(4, 9, 4, 0), Font = new Font(Font.FontFamily, 9.75f), ForeColor = Color.FromArgb(52, 58, 64) };
+                var tb = new TextBox { Width = 150, PlaceholderText = a.Default, Margin = new Padding(0, 6, 0, 0), Font = new Font(Font.FontFamily, 9.75f) };
                 tb.TextChanged += (_, _) => UpdateCmdPreview();
                 _cmdTips.SetToolTip(tb, a.Desc + (a.Required ? "（必填）" : "") + (a.Default.Length > 0 ? $"（留空 = {a.Default}）" : ""));
                 _cmdArgsPanel.Controls.Add(lb);
