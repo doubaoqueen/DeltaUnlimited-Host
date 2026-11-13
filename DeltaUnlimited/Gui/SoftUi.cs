@@ -86,7 +86,8 @@ public class SoftFlowPanel : FlowLayoutPanel
     }
 }
 
-/// <summary>圆角按钮：自绘填充 + 柔边 + 居中文字（悬停微亮、禁用文字减淡）。圆角外的四角透出父容器底色。</summary>
+/// <summary>圆角按钮：Region 裁切（与卡片同款，四角彻底不存在）+ 自绘填充/柔边/居中文字，
+/// 悬停微亮、禁用文字减淡。</summary>
 public class SoftButton : Button
 {
     private bool _hover;
@@ -102,9 +103,12 @@ public class SoftButton : Button
         MouseLeave += (_, _) => { _hover = false; Invalidate(); };
     }
 
-    protected override void OnPaintBackground(PaintEventArgs e)
+    protected override void OnResize(EventArgs e)
     {
-        // 留空：圆角外的四角透出父容器底色，不能刷成方块
+        base.OnResize(e);
+        using var path = SoftUi.RoundedPath(ClientRectangle, SoftUi.Radius);
+        Region?.Dispose();
+        Region = new Region(path);
     }
 
     protected override void OnPaint(PaintEventArgs e)
@@ -113,7 +117,7 @@ public class SoftButton : Button
         g.SmoothingMode = SmoothingMode.AntiAlias;
         Color fill = _hover ? ControlPaint.Light(BackColor, 0.10f) : BackColor;
         using var path = SoftUi.RoundedPath(ClientRectangle, SoftUi.Radius);
-        using (var brush = new SolidBrush(BackColor.IsEmpty ? SystemColors.Control : fill))
+        using (var brush = new SolidBrush(fill))
             g.FillPath(brush, path);
         using var pen = new Pen(BorderColor, 1f);
         g.DrawPath(pen, path);
