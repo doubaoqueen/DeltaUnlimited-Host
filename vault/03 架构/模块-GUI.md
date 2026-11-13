@@ -73,6 +73,18 @@ px_per_90deg <= 0 → 打印未标定警告
 > [!warning] 双击黑窗残留（v0.6.2 根治，同日）
 > v0.6.1 双击 exe 会在 Win11（默认终端 = Windows Terminal）下**残留黑窗**：exe 是控制台子系统（PE 子系统 3），OS 给它配终端；`FreeConsole()` 能让 conhost 关窗（09-26 修复原理），但 **WT 宿主窗不跟关**。根治 = 日常双击用 **WinExe 发布版**（`release\DeltaUnlimited.exe`，PE 子系统 2，OS 从不分配控制台）；CLI 仍走 `dotnet run`，发布 exe 从 cmd 调 CLI 用 `AttachConsole` 接回父控制台（`Cli/ConsoleAttach.cs`）。详见 [[坑-双击exe黑窗残留]]。
 
+### 3.2 布局与主题重排（v0.6.3，2026-11-13~14）
+
+用户目视验收反馈"排版拉了 + 太硬朗"后的结构级重排（功能零删减）：
+
+| 项 | 内容 |
+|---|---|
+| **左右主从布局** | 命令侧栏（SplitContainer Panel1，310px 可拖）+ 日志窗占主视野（Panel2）；顶栏全局操作（标题/主题切换/工作流/模式/开始/急停/清空），状态栏兜底 |
+| **深浅双主题** | `Gui/Theme.cs` record——按"角色"命名颜色（Window/Panel/Card/Text/TextMuted/Accent/Danger/LogBack/LogText/Border/FieldBack），浅色 Win11 风 + 深色两套；`ApplyTheme()` 按角色刷全部控件；顶栏 `🌙/☀` 按钮切换，`gui_settings.json → dark_theme` 记忆 |
+| **软边圆角** | `Gui/SoftUi.cs`：SoftPanel / SoftFlowPanel / SoftButton——Region 裁切圆角 + 自绘柔边（说明/参数/预览/日志四张卡 + 全部按钮）；⚠ 教训：按钮不能用"跳过背景绘制"偷懒，必须与卡片同款 Region 裁切 |
+| **单实例守护** | `GuiApp` 顶一个具名 Mutex——重复双击弹"已在运行（可能在托盘）"，不再堆叠托盘实例（八连托盘事件教训） |
+| **启动兜底** | `Application.Run(new MainForm(...))` 包 try/catch → `Logger.Error` + `MessageBox`——WinExe 启动失败必须可见，无声死亡不允许（[[坑-构造期事件链摸到未创建控件]]） |
+
 ## 4. 暂停点是怎么连起来的
 
 半自动模式下 chain 里的 `pause` / `mark_unknown` 会调 `CommandUtil.WaitForResume(message)`：
