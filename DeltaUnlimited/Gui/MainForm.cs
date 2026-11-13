@@ -8,9 +8,9 @@ using DeltaUnlimited.Data;
 
 namespace DeltaUnlimited.Gui;
 
-/// <summary>主控制面板（G2）：工作流/模式选择、开始/急停（后台线程执行链路 + 协作式急停）、
-/// 暂停面板（半自动人工确认点：继续/中止）、实时日志窗、系统托盘（收托盘/双击恢复/菜单/气泡通知）。
-/// 红线：急停永远优先——急停按钮/Ctrl+C/暂停面板"中止"都会释放所有按键并优雅收尾。</summary>
+/// <summary>主控制面板（G3）：**左右主从布局**——左侧命令侧栏（分类/命令/说明/参数/运行），右侧日志窗占主视野；
+/// 顶部全局栏（标题/主题切换/工作流/模式/开始/急停），底部状态栏。深浅两套主题可切换（记忆在 gui_settings）。
+/// 红线不变：急停永远优先——急停按钮/Ctrl+C/暂停面板"中止"都会释放所有按键并优雅收尾。</summary>
 public sealed class MainForm : Form
 {
     private const int LogMaxLines = 3000;
@@ -29,6 +29,7 @@ public sealed class MainForm : Form
     private readonly Button _stopButton;
     private readonly TextBox _logBox;
     private readonly ToolStripStatusLabel _statusLabel;
+    private readonly StatusStrip _statusStrip;
     private readonly Panel _pausePanel;
     private readonly Label _pauseLabel;
     private bool _reallyExit;
@@ -36,7 +37,15 @@ public sealed class MainForm : Form
     private bool _running;
     private Task? _runTask; // 链路线程句柄（退出收尾时等它停稳，评审 P3-7）
     private volatile string _lastOutcome = "";
-    private readonly GuiSettings _settings; // 本机设置（上次工作流/模式/窗口位置）
+    private readonly GuiSettings _settings; // 本机设置（上次工作流/模式/窗口位置/主题）
+    private Theme _theme;                   // 当前主题（切换按钮换调色板，结构不动）
+
+    // ---- 主题相关的结构引用（ApplyTheme 按"角色"上色）----
+    private FlowLayoutPanel _topBar = null!;
+    private Label _titleLabel = null!;
+    private Button _themeButton = null!;
+    private SplitContainer _split = null!;
+    private TableLayoutPanel _cmdSidebar = null!;
 
     // ---- 命令台（G3）：代替 cmd 的可视化命令启动器（数据驱动：data/gui_commands.json）----
     private readonly GuiCommandCatalog _cmdCatalog;
@@ -59,6 +68,7 @@ public sealed class MainForm : Form
         _store = store;
         _repoRoot = repoRoot;
         _settings = store.LoadGuiSettings();
+        _theme = _settings.DarkTheme ? Theme.Dark : Theme.Light;
 
         // 命令台目录加载（加载失败降级为空目录，面板照常构建，不让 GUI 起不来）
         GuiCommandCatalog? catalog = null;
@@ -68,62 +78,11 @@ public sealed class MainForm : Form
 
         Text = "DeltaUnlimited 控制面板";
         StartPosition = FormStartPosition.CenterScreen;
-        Size = new Size(1180, 760);
-        MinimumSize = new Size(940, 600);
+        Size = new Size(1240, 780);
+        MinimumSize = new Size(1020, 640);
         Icon = AppIconFactory.Create();
 
-        // ---- 日志窗（先加入，Dock.Fill 占剩余空间）----
-        _logBox = new TextBox
-        {
-            Dock = DockStyle.Fill,
-            Multiline = true,
-            ReadOnly = true,
-            ScrollBars = ScrollBars.Vertical,
-            Font = new Font("Consolas", 9f),
-            BackColor = Color.FromArgb(24, 28, 34),
-            ForeColor = Color.FromArgb(228, 231, 236),
-            BorderStyle = BorderStyle.None,
-        };
-        Controls.Add(_logBox);
-
-        // ---- 状态栏 ----
-        var status = new StatusStrip();
-        _statusLabel = new ToolStripStatusLabel("就绪 —— 选择工作流后点开始；急停随时有效");
-        status.Items.Add(_statusLabel);
-        Controls.Add(status);
-
-        // ---- 暂停面板（半自动人工确认点，非模态：急停按钮始终可用）----
-        _pausePanel = new Panel { Dock = DockStyle.Top, Height = 60, Visible = false, BackColor = Color.FromArgb(58, 48, 18) };
-        var abortButton = new Button { Text = "⛔ 中止链路", Dock = DockStyle.Right, Width = 130, ForeColor = Color.Red, Font = new Font(Font.FontFamily, 10f) };
-        abortButton.Click += (_, _) => AbortFromPause();
-        var contButton = new Button { Text = "▶ 继续", Dock = DockStyle.Right, Width = 110, Font = new Font(Font.FontFamily, 10f) };
-        contButton.Click += (_, _) => { PauseGate.Resume(); _pausePanel.Visible = false; };
-        _pauseLabel = new Label { Text = "", Dock = DockStyle.Fill, ForeColor = Color.FromArgb(255, 220, 120), TextAlign = ContentAlignment.MiddleLeft, Font = new Font(Font.FontFamily, 10f) };
-        _pausePanel.Controls.Add(_pauseLabel);
-        _pausePanel.Controls.Add(abortButton);
-        _pausePanel.Controls.Add(contButton);
-        Controls.Add(_pausePanel);
-
-        // ---- 顶部控制区（最后加入 → 停靠最顶部；后续新按钮直接往里加，宽度自动流式排列）----
-        var top = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 58, Padding = new Padding(12, 10, 12, 0), WrapContents = false };
-        top.Controls.Add(new Label { Text = "工作流", AutoSize = true, Margin = new Padding(0, 8, 6, 0), Font = new Font(Font.FontFamily, 10f) });
-        _workflowBox = new ComboBox { Width = 240, DropDownStyle = ComboBoxStyle.DropDownList, Font = new Font(Font.FontFamily, 10f) };
-        foreach (var wf in WorkflowCatalog.List(repoRoot)) _workflowBox.Items.Add(wf);
-        int defIdx = _workflowBox.Items?.IndexOf("enter_match.json") ?? -1;
-        if (defIdx >= 0) _workflowBox.SelectedIndex = defIdx;
-        else if ((_workflowBox.Items?.Count ?? 0) > 0) _workflowBox.SelectedIndex = 0;
-        top.Controls.Add(_workflowBox);
-
-        top.Controls.Add(new Label { Text = "模式", AutoSize = true, Margin = new Padding(18, 8, 6, 0), Font = new Font(Font.FontFamily, 10f) });
-        _modeBox = new ComboBox { Width = 210, DropDownStyle = ComboBoxStyle.DropDownList, Font = new Font(Font.FontFamily, 10f) };
-        _modeBox.Items.AddRange(new object[] { "半自动（暂停点人工确认）", "全自动（跳过暂停点）" });
-        _modeBox.SelectedIndex = 0;
-        top.Controls.Add(_modeBox);
-
-        // ---- 应用上次设置（本机记忆：工作流/模式/窗口位置；越界或已删除则回退默认）----
-        if (!string.IsNullOrEmpty(_settings.LastWorkflow) && _workflowBox.Items.Contains(_settings.LastWorkflow))
-            _workflowBox.SelectedItem = _settings.LastWorkflow;
-        _modeBox.SelectedIndex = _settings.AutoMode ? 1 : 0;
+        // ---- 应用上次窗口位置（越界或过小则回退默认居中）----
         if (_settings is { WindowW: > 0, WindowH: > 0 })
         {
             var b = new Rectangle(_settings.WindowX ?? 0, _settings.WindowY ?? 0,
@@ -136,21 +95,81 @@ public sealed class MainForm : Form
             }
         }
 
-        _startButton = new Button { Text = "▶ 开始", Width = 140, Height = 42, Margin = new Padding(24, 0, 0, 0), Font = new Font(Font.FontFamily, 11f, FontStyle.Bold) };
+        // ---- 日志窗（右侧主区，Dock.Fill 在 SplitContainer.Panel2）----
+        _logBox = new TextBox
+        {
+            Dock = DockStyle.Fill,
+            Multiline = true,
+            ReadOnly = true,
+            ScrollBars = ScrollBars.Vertical,
+            Font = new Font("Consolas", 9.75f),
+            BorderStyle = BorderStyle.None,
+        };
+        _split = new SplitContainer { Dock = DockStyle.Fill, FixedPanel = FixedPanel.Panel1 };
+        _split.Panel1MinSize = 280;
+        _split.Panel2.Controls.Add(_logBox);
+
+        // ---- 命令侧栏（左侧）----
+        var cmdSidebar = BuildCommandSidebar();
+        _split.Panel1.Controls.Add(cmdSidebar);
+
+        // ---- 状态栏 ----
+        _statusStrip = new StatusStrip { SizingGrip = false };
+        _statusLabel = new ToolStripStatusLabel("就绪 —— 选择工作流后点开始；急停随时有效");
+        _statusStrip.Items.Add(_statusLabel);
+
+        // ---- 暂停面板（半自动人工确认点，非模态：急停按钮始终可用）----
+        _pausePanel = new Panel { Dock = DockStyle.Top, Height = 60, Visible = false };
+        var abortButton = new Button { Text = "⛔ 中止链路", Dock = DockStyle.Right, Width = 130, Font = new Font(Font.FontFamily, 10f) };
+        abortButton.Click += (_, _) => AbortFromPause();
+        var contButton = new Button { Text = "▶ 继续", Dock = DockStyle.Right, Width = 110, Font = new Font(Font.FontFamily, 10f) };
+        contButton.Click += (_, _) => { PauseGate.Resume(); _pausePanel.Visible = false; };
+        _pauseLabel = new Label { Text = "", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Font = new Font(Font.FontFamily, 10f) };
+        _pausePanel.Controls.Add(_pauseLabel);
+        _pausePanel.Controls.Add(abortButton);
+        _pausePanel.Controls.Add(contButton);
+
+        // ---- 顶部全局栏（最后加入 → 停靠最顶部）----
+        _topBar = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 56, Padding = new Padding(14, 11, 14, 0), WrapContents = false };
+        _titleLabel = new Label { Text = "DeltaUnlimited", AutoSize = true, Margin = new Padding(0, 8, 18, 0), Font = new Font(Font.FontFamily, 12.5f, FontStyle.Bold) };
+        _topBar.Controls.Add(_titleLabel);
+
+        _themeButton = new Button { Text = "🌙 深色", Width = 92, Height = 34, Margin = new Padding(0, 1, 14, 0) };
+        _themeButton.Click += (_, _) => ToggleTheme();
+        _topBar.Controls.Add(_themeButton);
+
+        _topBar.Controls.Add(new Label { Text = "工作流", AutoSize = true, Margin = new Padding(0, 10, 6, 0), Font = new Font(Font.FontFamily, 10f) });
+        _workflowBox = new ComboBox { Width = 210, DropDownStyle = ComboBoxStyle.DropDownList, Font = new Font(Font.FontFamily, 10f) };
+        foreach (var wf in WorkflowCatalog.List(repoRoot)) _workflowBox.Items.Add(wf);
+        int defIdx = _workflowBox.Items?.IndexOf("enter_match.json") ?? -1;
+        if (defIdx >= 0) _workflowBox.SelectedIndex = defIdx;
+        else if ((_workflowBox.Items?.Count ?? 0) > 0) _workflowBox.SelectedIndex = 0;
+        if (!string.IsNullOrEmpty(_settings.LastWorkflow) && _workflowBox.Items.Contains(_settings.LastWorkflow))
+            _workflowBox.SelectedItem = _settings.LastWorkflow;
+        _topBar.Controls.Add(_workflowBox);
+
+        _topBar.Controls.Add(new Label { Text = "模式", AutoSize = true, Margin = new Padding(16, 10, 6, 0), Font = new Font(Font.FontFamily, 10f) });
+        _modeBox = new ComboBox { Width = 190, DropDownStyle = ComboBoxStyle.DropDownList, Font = new Font(Font.FontFamily, 10f) };
+        _modeBox.Items.AddRange(new object[] { "半自动（暂停点人工确认）", "全自动（跳过暂停点）" });
+        _modeBox.SelectedIndex = _settings.AutoMode ? 1 : 0;
+        _topBar.Controls.Add(_modeBox);
+
+        _startButton = new Button { Text = "▶ 开始", Width = 120, Height = 34, Margin = new Padding(20, 1, 0, 0), Font = new Font(Font.FontFamily, 10f, FontStyle.Bold) };
         _startButton.Click += (_, _) => StartChain();
-        _stopButton = new Button { Text = "⛔ 急停", Width = 140, Height = 42, Enabled = false, ForeColor = Color.Red, Margin = new Padding(10, 0, 0, 0), Font = new Font(Font.FontFamily, 11f, FontStyle.Bold) };
+        _stopButton = new Button { Text = "⛔ 急停", Width = 104, Height = 34, Enabled = false, Margin = new Padding(8, 1, 0, 0), Font = new Font(Font.FontFamily, 10f, FontStyle.Bold) };
         _stopButton.Click += (_, _) => CommandUtil.RequestStop();
-        var clearButton = new Button { Text = "清空日志", Width = 110, Height = 42, Margin = new Padding(10, 0, 0, 0), Font = new Font(Font.FontFamily, 10f) };
+        var clearButton = new Button { Text = "清空日志", Width = 92, Height = 34, Margin = new Padding(8, 1, 0, 0), Font = new Font(Font.FontFamily, 10f) };
         clearButton.Click += (_, _) => { _logBox.Clear(); };
-        top.Controls.Add(_startButton);
-        top.Controls.Add(_stopButton);
-        top.Controls.Add(clearButton);
+        _topBar.Controls.Add(_startButton);
+        _topBar.Controls.Add(_stopButton);
+        _topBar.Controls.Add(clearButton);
 
-        // ---- 命令台（G3）：停靠在顶栏之下、暂停面板之上——后加入者靠上，故在暂停面板之后、顶栏之前加入 ----
-        var cmdPanel = BuildCommandPanel();
-        Controls.Add(cmdPanel);
-
-        Controls.Add(top);
+        // ---- 加入窗体（停靠处理顺序 = 后加者靠上：顶栏 → 暂停面板 → 主分栏 → 状态栏）----
+        Controls.Add(_split);
+        Controls.Add(_pausePanel);
+        Controls.Add(_topBar);
+        Controls.Add(_statusStrip);
+        _split.SplitterDistance = 310;
 
         // ---- 系统托盘 ----
         _tray = new NotifyIcon { Icon = Icon, Text = "DeltaUnlimited", Visible = true };
@@ -186,6 +205,292 @@ public sealed class MainForm : Form
         _logTimer = new System.Windows.Forms.Timer { Interval = 100 };
         _logTimer.Tick += (_, _) => FlushLogQueue();
         _logTimer.Start();
+
+        ApplyTheme();
+    }
+
+    // ===== 命令侧栏（左右主从的左栏）=====
+
+    /// <summary>构建命令侧栏：分类/命令下拉 → 运行/停止 → 说明 → 参数表单（吃掉剩余高度）→ 命令行预览。
+    /// 注意控件创建顺序：先建全部字段再 PopulateCommands（事件链会用到它们）。</summary>
+    private TableLayoutPanel BuildCommandSidebar()
+    {
+        var f = new Font(Font.FontFamily, 10f);
+        var sidebar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, Padding = new Padding(10, 8, 10, 8), Margin = new Padding(0) };
+        _cmdSidebar = sidebar;
+        sidebar.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));   // 分类
+        sidebar.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));   // 命令
+        sidebar.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));   // 运行/停止
+        sidebar.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));   // 说明
+        sidebar.RowStyles.Add(new RowStyle(SizeType.Percent, 100));   // 参数（吃掉剩余高度）
+        sidebar.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));   // 命令行预览
+
+        _cmdGroupBox = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList, Font = f };
+        foreach (var g in _cmdCatalog.Groups) _cmdGroupBox.Items.Add(g.Title);
+        if (_cmdGroupBox.Items.Count > 0) _cmdGroupBox.SelectedIndex = 0;
+        _cmdGroupBox.SelectedIndexChanged += (_, _) => PopulateCommands();
+        sidebar.Controls.Add(_cmdGroupBox, 0, 0);
+
+        _cmdBox = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList, Font = f };
+        _cmdBox.SelectedIndexChanged += (_, _) => OnCommandSelected();
+        sidebar.Controls.Add(_cmdBox, 0, 1);
+
+        var rowBtn = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = new Padding(0) };
+        _cmdRunButton = new Button { Text = "▶ 运行命令", Width = 128, Height = 34, Margin = new Padding(0, 4, 8, 0), Font = new Font(Font.FontFamily, 10f, FontStyle.Bold) };
+        _cmdRunButton.Click += (_, _) => RunCommand();
+        rowBtn.Controls.Add(_cmdRunButton);
+        _cmdStopButton = new Button { Text = "⛔ 停止", Width = 108, Height = 34, Enabled = false, Margin = new Padding(0, 4, 0, 0), Font = f };
+        _cmdStopButton.Click += (_, _) => StopCommand();
+        rowBtn.Controls.Add(_cmdStopButton);
+        sidebar.Controls.Add(rowBtn, 0, 2);
+
+        // 说明（人话描述 + 用法提示 + 风险警示）
+        _cmdDescBox = new TextBox { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, BorderStyle = BorderStyle.FixedSingle, Font = new Font("Microsoft YaHei UI", 9.75f) };
+        sidebar.Controls.Add(_cmdDescBox, 0, 3);
+
+        // 参数表单（按所选命令动态生成）
+        _cmdArgsPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true, AutoScroll = true, BorderStyle = BorderStyle.FixedSingle };
+        sidebar.Controls.Add(_cmdArgsPanel, 0, 4);
+
+        // 命令行预览——预览的就是会跑的
+        _cmdPreviewBox = new TextBox { Dock = DockStyle.Fill, ReadOnly = true, Font = new Font("Consolas", 9.75f), BorderStyle = BorderStyle.FixedSingle };
+        sidebar.Controls.Add(_cmdPreviewBox, 0, 5);
+
+        PopulateCommands();
+        return sidebar;
+    }
+
+    private void PopulateCommands()
+    {
+        _cmdVisible.Clear();
+        _cmdBox.Items.Clear();
+        string? title = _cmdGroupBox.SelectedItem as string;
+        var groupId = _cmdCatalog.Groups.FirstOrDefault(g => g.Title == title)?.Id ?? "";
+        _cmdVisible.AddRange(_cmdCatalog.Commands.Where(c => c.Group == groupId));
+        foreach (var d in _cmdVisible) _cmdBox.Items.Add(DisplayName(d));
+        if (_cmdBox.Items.Count > 0) _cmdBox.SelectedIndex = 0;
+    }
+
+    private static string DisplayName(GuiCommandDef d)
+        => d.Verb + (d.FixedArgs.Count > 0 ? " " + string.Join(' ', d.FixedArgs) : "");
+
+    private void OnCommandSelected()
+    {
+        _cmdCurrent = _cmdBox.SelectedIndex >= 0 && _cmdBox.SelectedIndex < _cmdVisible.Count ? _cmdVisible[_cmdBox.SelectedIndex] : null;
+        _cmdArgsPanel.Controls.Clear();
+        _cmdTips.RemoveAll();
+        if (_cmdCurrent is null)
+        {
+            _cmdDescBox.Text = "（该分组没有命令）";
+            UpdateCmdPreview();
+            UpdateBusyUi();
+            return;
+        }
+        var def = _cmdCurrent;
+        string warn = def.Exclusive ? "\r\n⚠ 会动键鼠/抢占游戏：链路运行期间禁止调起。" : "";
+        string nostop = def.Stoppable ? "" : "\r\n⚠ 常驻逻辑：无急停检查点，GUI 内不可停止。";
+        _cmdDescBox.Text = def.Desc + (def.Note.Length > 0 ? "\r\nℹ " + def.Note : "") + warn + nostop;
+
+        foreach (var a in def.Args)
+        {
+            if (a.Kind == "switch")
+            {
+                var ck = new CheckBox { Text = "--" + a.Name, AutoSize = true, Margin = new Padding(4, 10, 12, 0), Font = new Font(Font.FontFamily, 9.75f) };
+                ck.CheckedChanged += (_, _) => UpdateCmdPreview();
+                _cmdTips.SetToolTip(ck, a.Desc);
+                _cmdArgsPanel.Controls.Add(ck);
+            }
+            else
+            {
+                string label = (a.Kind == "flag" ? "--" : "") + a.Name + (a.Required ? "*" : "");
+                var lb = new Label { Text = label, AutoSize = true, Margin = new Padding(4, 9, 4, 0), Font = new Font(Font.FontFamily, 9.75f) };
+                var tb = new TextBox { Width = 168, PlaceholderText = a.Default, Margin = new Padding(0, 6, 0, 0), Font = new Font(Font.FontFamily, 9.75f) };
+                tb.TextChanged += (_, _) => UpdateCmdPreview();
+                _cmdTips.SetToolTip(tb, a.Desc + (a.Required ? "（必填）" : "") + (a.Default.Length > 0 ? $"（留空 = {a.Default}）" : ""));
+                _cmdArgsPanel.Controls.Add(lb);
+                _cmdArgsPanel.Controls.Add(tb);
+            }
+        }
+        UpdateCmdPreview();
+        UpdateBusyUi();
+        ApplyTheme(); // 动态控件按当前主题上色
+    }
+
+    /// <summary>按控件类型分流收集当前表单值（与 def.Args 顺序一一对应）。</summary>
+    private (List<string> Values, List<bool> Switches) CollectCurrentValues()
+    {
+        var values = new List<string>();
+        var switches = new List<bool>();
+        foreach (var c in _cmdArgsPanel.Controls)
+        {
+            if (c is TextBox tb) values.Add(tb.Text);
+            else if (c is CheckBox ck) switches.Add(ck.Checked);
+        }
+        return (values, switches);
+    }
+
+    private void UpdateCmdPreview()
+    {
+        if (_cmdCurrent is null) { _cmdPreviewBox.Text = ""; return; }
+        try
+        {
+            var (v, s) = CollectCurrentValues();
+            _cmdPreviewBox.Text = CommandCatalog.BuildPreview(CommandCatalog.BuildArgs(_cmdCurrent, v, s));
+        }
+        catch (ArgumentException ex)
+        {
+            _cmdPreviewBox.Text = "（参数未填全：" + ex.Message + "）";
+        }
+    }
+
+    private void RunCommand()
+    {
+        var def = _cmdCurrent;
+        if (def is null || _cmdRunning) return;
+        if (_running && def.Exclusive)
+        {
+            _statusLabel.Text = "⚠ 链路运行中，不能调起会动键鼠的命令——先急停链路";
+            return;
+        }
+        string[] tokens;
+        try
+        {
+            var (v, s) = CollectCurrentValues();
+            tokens = CommandCatalog.BuildArgs(def, v, s);
+        }
+        catch (ArgumentException ex)
+        {
+            _statusLabel.Text = "⚠ " + ex.Message;
+            return;
+        }
+        if (!_running) CommandUtil.ResetStop(); // 链路没跑时独占急停标志；链路在跑（非独占诊断）时不能动它
+        _cmdRunning = true;
+        _cmdOutcome = "";
+        string verb = def.Verb;
+        _statusLabel.Text = $"▶ 命令运行中：{verb} —— 输出见右侧日志" + (_running ? "（注意：此刻停止会同时急停链路）" : "");
+        Console.WriteLine($"—— 命令台运行：{CommandCatalog.BuildPreview(tokens)}");
+        _cmdTask = Task.Run(() =>
+        {
+            try
+            {
+                CliDispatcher.Dispatch(verb, _store, _repoRoot, tokens);
+                _cmdOutcome = CommandUtil.StopRequested ? "已停止" : "完成";
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine(ex.ToString());
+                _cmdOutcome = "失败";
+            }
+        });
+        _cmdTask.ContinueWith(_ => OnCommandEnded(verb), TaskScheduler.FromCurrentSynchronizationContext());
+        UpdateBusyUi();
+    }
+
+    private void OnCommandEnded(string verb)
+    {
+        if (IsDisposed || Disposing) return; // 命令结束恰逢窗口退出
+        _cmdRunning = false;
+        string msg = _cmdOutcome switch
+        {
+            "完成" => $"✓ 命令 {verb} 完成",
+            "已停止" => $"⛔ 命令 {verb} 已停止（所有按键已释放）",
+            "失败" => $"❌ 命令 {verb} 失败（异常见日志）",
+            _ => $"命令 {verb} 结束",
+        };
+        _statusLabel.Text = msg;
+        Console.WriteLine($"—— {msg}");
+        UpdateBusyUi();
+    }
+
+    private void StopCommand()
+    {
+        CommandUtil.RequestStop();
+        _statusLabel.Text = _running
+            ? "⛔ 已请求停止（急停同时作用于运行中的链路；所有按键已释放）"
+            : "⛔ 已请求停止（正在收尾…）";
+    }
+
+    /// <summary>链路（_running）与命令（_cmdRunning）双状态的按钮可用性调和：
+    /// 开始 vs 运行命令互斥（共用急停标志与键鼠）；独占命令在链路运行期间禁用。</summary>
+    private void UpdateBusyUi()
+    {
+        bool exclusive = _cmdCurrent?.Exclusive == true;
+        _startButton.Enabled = !_running && !_cmdRunning;
+        _cmdRunButton.Enabled = _cmdCurrent is not null && !_cmdRunning && (!_running || !exclusive);
+        _cmdStopButton.Enabled = _cmdRunning;
+    }
+
+    // ===== 主题 =====
+
+    private void ToggleTheme()
+    {
+        _theme = _theme.IsDark ? Theme.Light : Theme.Dark;
+        _settings.DarkTheme = _theme.IsDark;
+        _store.SaveGuiSettings(_settings); // 与既有设置写入一致：失败不影响运行
+        ApplyTheme();
+    }
+
+    private void StyleButton(Button b, bool accent = false, bool danger = false)
+    {
+        b.FlatStyle = FlatStyle.Flat;
+        b.FlatAppearance.BorderSize = 1;
+        b.FlatAppearance.BorderColor = _theme.Border;
+        b.FlatAppearance.MouseOverBackColor = _theme.IsDark ? _theme.Card : Color.FromArgb(233, 237, 242);
+        b.BackColor = accent ? _theme.Accent : _theme.Card;
+        b.ForeColor = danger ? _theme.Danger : accent ? _theme.AccentText : _theme.Text;
+    }
+
+    /// <summary>按"角色"给全部控件上色——换主题只换调色板，结构不动。</summary>
+    private void ApplyTheme()
+    {
+        var t = _theme;
+        BackColor = t.Window;
+
+        // 顶栏
+        _topBar.BackColor = t.Window;
+        foreach (Control c in _topBar.Controls)
+        {
+            switch (c)
+            {
+                case Label l: l.ForeColor = l == _titleLabel ? t.Accent : t.Text; break;
+                case ComboBox cb: cb.BackColor = t.FieldBack; cb.ForeColor = t.Text; break;
+                case Button b: StyleButton(b, accent: b == _startButton, danger: b == _stopButton); break;
+            }
+        }
+        _themeButton.Text = t.IsDark ? "☀ 浅色" : "🌙 深色";
+
+        // 日志窗
+        _logBox.BackColor = t.LogBack;
+        _logBox.ForeColor = t.LogText;
+
+        // 暂停面板（暖色警示条，深浅各一版）
+        _pausePanel.BackColor = t.IsDark ? Color.FromArgb(74, 58, 16) : Color.FromArgb(255, 244, 214);
+        _pauseLabel.ForeColor = t.IsDark ? Color.FromArgb(255, 220, 120) : Color.FromArgb(110, 78, 0);
+        foreach (Control c in _pausePanel.Controls)
+            if (c is Button b) StyleButton(b);
+
+        // 命令侧栏
+        _cmdSidebar.BackColor = t.Panel;
+        _cmdGroupBox.BackColor = t.FieldBack; _cmdGroupBox.ForeColor = t.Text;
+        _cmdBox.BackColor = t.FieldBack; _cmdBox.ForeColor = t.Text;
+        _cmdDescBox.BackColor = t.Card; _cmdDescBox.ForeColor = t.Text;
+        _cmdArgsPanel.BackColor = t.Card;
+        _cmdPreviewBox.BackColor = t.LogBack; _cmdPreviewBox.ForeColor = t.LogText;
+        foreach (Control c in _cmdArgsPanel.Controls)
+        {
+            switch (c)
+            {
+                case Label l: l.ForeColor = t.Text; break;
+                case CheckBox ck: ck.ForeColor = t.Text; break;
+                case TextBox tb: tb.BackColor = t.FieldBack; tb.ForeColor = t.Text; break;
+            }
+        }
+        StyleButton(_cmdRunButton, accent: true);
+        StyleButton(_cmdStopButton, danger: true);
+
+        // 状态栏
+        _statusStrip.BackColor = t.Window;
+        _statusLabel.ForeColor = t.Text;
     }
 
     // ===== 链路执行 =====
@@ -196,7 +501,7 @@ public sealed class MainForm : Form
         if (_cmdRunning) { _statusLabel.Text = "⚠ 命令还在运行——等它结束或先停止，再开始链路"; return; }
         if (_workflowBox.SelectedItem is not string wf || wf.Length == 0)
         {
-            _statusLabel.Text = "⚠️ 请先选择工作流";
+            _statusLabel.Text = "⚠ 请先选择工作流";
             return;
         }
         bool auto = _modeBox.SelectedIndex == 1;
@@ -303,217 +608,6 @@ public sealed class MainForm : Form
         _logBox.ScrollToCaret();
     }
 
-    // ===== 命令台（G3）：代替 cmd 的可视化命令启动器 =====
-
-    /// <summary>构建命令台面板：分类/命令下拉 + 说明 + 动态参数表单 + 命令行预览。
-    /// 注意控件创建顺序：先建全部字段再 PopulateCommands（事件链会用到它们）。</summary>
-    private Panel BuildCommandPanel()
-    {
-        var f = new Font(Font.FontFamily, 10f);
-        var panel = new Panel { Dock = DockStyle.Top, Height = 244, BackColor = Color.FromArgb(248, 249, 251), Padding = new Padding(10, 4, 10, 6) };
-        var grid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Margin = new Padding(0) };
-        grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-        grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
-        grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 78));
-        grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-
-        // r0：标题 + 分类 + 命令 + 运行/停止（默认分类先于事件接线设置，避免链式触发时字段未就绪）
-        var row0 = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = new Padding(0), BackColor = Color.FromArgb(248, 249, 251) };
-        row0.Controls.Add(new Label { Text = "命令台", AutoSize = true, Margin = new Padding(0, 9, 12, 0), Font = new Font(Font.FontFamily, 11f, FontStyle.Bold), ForeColor = Color.FromArgb(0, 106, 74) });
-        row0.Controls.Add(new Label { Text = "分类", AutoSize = true, Margin = new Padding(0, 10, 6, 0), Font = f });
-        _cmdGroupBox = new ComboBox { Width = 230, DropDownStyle = ComboBoxStyle.DropDownList, Font = f };
-        foreach (var g in _cmdCatalog.Groups) _cmdGroupBox.Items.Add(g.Title);
-        if (_cmdGroupBox.Items.Count > 0) _cmdGroupBox.SelectedIndex = 0;
-        _cmdGroupBox.SelectedIndexChanged += (_, _) => PopulateCommands();
-        row0.Controls.Add(_cmdGroupBox);
-        row0.Controls.Add(new Label { Text = "命令", AutoSize = true, Margin = new Padding(14, 10, 6, 0), Font = f });
-        _cmdBox = new ComboBox { Width = 240, DropDownStyle = ComboBoxStyle.DropDownList, Font = f };
-        _cmdBox.SelectedIndexChanged += (_, _) => OnCommandSelected();
-        row0.Controls.Add(_cmdBox);
-        _cmdRunButton = new Button { Text = "▶ 运行", Width = 96, Height = 32, Margin = new Padding(14, 3, 0, 0), Font = new Font(Font.FontFamily, 10f, FontStyle.Bold) };
-        _cmdRunButton.Click += (_, _) => RunCommand();
-        row0.Controls.Add(_cmdRunButton);
-        _cmdStopButton = new Button { Text = "⛔ 停止", Width = 86, Height = 32, Enabled = false, ForeColor = Color.Red, Margin = new Padding(8, 3, 0, 0), Font = f };
-        _cmdStopButton.Click += (_, _) => StopCommand();
-        row0.Controls.Add(_cmdStopButton);
-        grid.Controls.Add(row0, 0, 0);
-
-        // r1：说明（人话描述 + 用法提示 + 风险警示）——浅底深字，看得清优先
-        _cmdDescBox = new TextBox { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, BackColor = Color.FromArgb(255, 255, 255), ForeColor = Color.FromArgb(52, 58, 64), BorderStyle = BorderStyle.FixedSingle, Font = new Font("Microsoft YaHei UI", 9.75f) };
-        grid.Controls.Add(_cmdDescBox, 0, 1);
-
-        // r2：参数表单（按所选命令动态生成）
-        _cmdArgsPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true, AutoScroll = true, BorderStyle = BorderStyle.FixedSingle, BackColor = Color.FromArgb(255, 255, 255) };
-        grid.Controls.Add(_cmdArgsPanel, 0, 2);
-
-        // r3：命令行预览——预览的就是会跑的
-        _cmdPreviewBox = new TextBox { Dock = DockStyle.Fill, ReadOnly = true, Font = new Font("Consolas", 9.75f), BackColor = Color.FromArgb(250, 251, 252), ForeColor = Color.FromArgb(0, 106, 78), BorderStyle = BorderStyle.FixedSingle };
-        grid.Controls.Add(_cmdPreviewBox, 0, 3);
-
-        panel.Controls.Add(grid);
-        PopulateCommands();
-        return panel;
-    }
-
-    private void PopulateCommands()
-    {
-        _cmdVisible.Clear();
-        _cmdBox.Items.Clear();
-        string? title = _cmdGroupBox.SelectedItem as string;
-        var groupId = _cmdCatalog.Groups.FirstOrDefault(g => g.Title == title)?.Id ?? "";
-        _cmdVisible.AddRange(_cmdCatalog.Commands.Where(c => c.Group == groupId));
-        foreach (var d in _cmdVisible) _cmdBox.Items.Add(DisplayName(d));
-        if (_cmdBox.Items.Count > 0) _cmdBox.SelectedIndex = 0;
-    }
-
-    private static string DisplayName(GuiCommandDef d)
-        => d.Verb + (d.FixedArgs.Count > 0 ? " " + string.Join(' ', d.FixedArgs) : "");
-
-    private void OnCommandSelected()
-    {
-        _cmdCurrent = _cmdBox.SelectedIndex >= 0 && _cmdBox.SelectedIndex < _cmdVisible.Count ? _cmdVisible[_cmdBox.SelectedIndex] : null;
-        _cmdArgsPanel.Controls.Clear();
-        _cmdTips.RemoveAll();
-        if (_cmdCurrent is null)
-        {
-            _cmdDescBox.Text = "（该分组没有命令）";
-            UpdateCmdPreview();
-            UpdateBusyUi();
-            return;
-        }
-        var def = _cmdCurrent;
-        string warn = def.Exclusive ? "\r\n⚠ 会动键鼠/抢占游戏：链路运行期间禁止调起。" : "";
-        string nostop = def.Stoppable ? "" : "\r\n⚠ 常驻逻辑：无急停检查点，GUI 内不可停止。";
-        _cmdDescBox.Text = def.Desc + (def.Note.Length > 0 ? "\r\nℹ " + def.Note : "") + warn + nostop;
-
-        foreach (var a in def.Args)
-        {
-            if (a.Kind == "switch")
-            {
-                var ck = new CheckBox { Text = "--" + a.Name, AutoSize = true, Margin = new Padding(4, 10, 12, 0), Font = new Font(Font.FontFamily, 9.75f), ForeColor = Color.FromArgb(52, 58, 64) };
-                ck.CheckedChanged += (_, _) => UpdateCmdPreview();
-                _cmdTips.SetToolTip(ck, a.Desc);
-                _cmdArgsPanel.Controls.Add(ck);
-            }
-            else
-            {
-                string label = (a.Kind == "flag" ? "--" : "") + a.Name + (a.Required ? "*" : "");
-                var lb = new Label { Text = label, AutoSize = true, Margin = new Padding(4, 9, 4, 0), Font = new Font(Font.FontFamily, 9.75f), ForeColor = Color.FromArgb(52, 58, 64) };
-                var tb = new TextBox { Width = 150, PlaceholderText = a.Default, Margin = new Padding(0, 6, 0, 0), Font = new Font(Font.FontFamily, 9.75f) };
-                tb.TextChanged += (_, _) => UpdateCmdPreview();
-                _cmdTips.SetToolTip(tb, a.Desc + (a.Required ? "（必填）" : "") + (a.Default.Length > 0 ? $"（留空 = {a.Default}）" : ""));
-                _cmdArgsPanel.Controls.Add(lb);
-                _cmdArgsPanel.Controls.Add(tb);
-            }
-        }
-        UpdateCmdPreview();
-        UpdateBusyUi();
-    }
-
-    /// <summary>按控件类型分流收集当前表单值（与 def.Args 顺序一一对应）。</summary>
-    private (List<string> Values, List<bool> Switches) CollectCurrentValues()
-    {
-        var values = new List<string>();
-        var switches = new List<bool>();
-        foreach (var c in _cmdArgsPanel.Controls)
-        {
-            if (c is TextBox tb) values.Add(tb.Text);
-            else if (c is CheckBox ck) switches.Add(ck.Checked);
-        }
-        return (values, switches);
-    }
-
-    private void UpdateCmdPreview()
-    {
-        if (_cmdCurrent is null) { _cmdPreviewBox.Text = ""; return; }
-        try
-        {
-            var (v, s) = CollectCurrentValues();
-            _cmdPreviewBox.Text = CommandCatalog.BuildPreview(CommandCatalog.BuildArgs(_cmdCurrent, v, s));
-        }
-        catch (ArgumentException ex)
-        {
-            _cmdPreviewBox.Text = "（参数未填全：" + ex.Message + "）";
-        }
-    }
-
-    private void RunCommand()
-    {
-        var def = _cmdCurrent;
-        if (def is null || _cmdRunning) return;
-        if (_running && def.Exclusive)
-        {
-            _statusLabel.Text = "⚠ 链路运行中，不能调起会动键鼠的命令——先急停链路";
-            return;
-        }
-        string[] tokens;
-        try
-        {
-            var (v, s) = CollectCurrentValues();
-            tokens = CommandCatalog.BuildArgs(def, v, s);
-        }
-        catch (ArgumentException ex)
-        {
-            _statusLabel.Text = "⚠ " + ex.Message;
-            return;
-        }
-        if (!_running) CommandUtil.ResetStop(); // 链路没跑时独占急停标志；链路在跑（非独占诊断）时不能动它
-        _cmdRunning = true;
-        _cmdOutcome = "";
-        string verb = def.Verb;
-        _statusLabel.Text = $"▶ 命令运行中：{verb} —— 输出见下方日志" + (_running ? "（注意：此刻停止会同时急停链路）" : "");
-        Console.WriteLine($"—— 命令台运行：{CommandCatalog.BuildPreview(tokens)}");
-        _cmdTask = Task.Run(() =>
-        {
-            try
-            {
-                CliDispatcher.Dispatch(verb, _store, _repoRoot, tokens);
-                _cmdOutcome = CommandUtil.StopRequested ? "已停止" : "完成";
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine(ex.ToString());
-                _cmdOutcome = "失败";
-            }
-        });
-        _cmdTask.ContinueWith(_ => OnCommandEnded(verb), TaskScheduler.FromCurrentSynchronizationContext());
-        UpdateBusyUi();
-    }
-
-    private void OnCommandEnded(string verb)
-    {
-        if (IsDisposed || Disposing) return; // 命令结束恰逢窗口退出
-        _cmdRunning = false;
-        string msg = _cmdOutcome switch
-        {
-            "完成" => $"✓ 命令 {verb} 完成",
-            "已停止" => $"⛔ 命令 {verb} 已停止（所有按键已释放）",
-            "失败" => $"❌ 命令 {verb} 失败（异常见日志）",
-            _ => $"命令 {verb} 结束",
-        };
-        _statusLabel.Text = msg;
-        Console.WriteLine($"—— {msg}");
-        UpdateBusyUi();
-    }
-
-    private void StopCommand()
-    {
-        CommandUtil.RequestStop();
-        _statusLabel.Text = _running
-            ? "⛔ 已请求停止（急停同时作用于运行中的链路；所有按键已释放）"
-            : "⛔ 已请求停止（正在收尾…）";
-    }
-
-    /// <summary>链路（_running）与命令（_cmdRunning）双状态的按钮可用性调和：
-    /// 开始 vs 运行命令互斥（共用急停标志与键鼠）；独占命令在链路运行期间禁用。</summary>
-    private void UpdateBusyUi()
-    {
-        bool exclusive = _cmdCurrent?.Exclusive == true;
-        _startButton.Enabled = !_running && !_cmdRunning;
-        _cmdRunButton.Enabled = _cmdCurrent is not null && !_cmdRunning && (!_running || !exclusive);
-        _cmdStopButton.Enabled = _cmdRunning;
-    }
-
     // ===== 托盘 =====
 
     private void HideToTray()
@@ -551,7 +645,7 @@ public sealed class MainForm : Form
             _settings.WindowH = Bounds.Height;
             _store.SaveGuiSettings(_settings);
         }
-        // 急停并给链路线程 2s 收尾窗口（评审 P3-7：否则按键释放存在微小竞态窗口）
+        // 急停并给链路/命令线程 2s 收尾窗口（评审 P3-7：否则按键释放存在微小竞态窗口）
         if (_running)
         {
             CommandUtil.RequestStop();

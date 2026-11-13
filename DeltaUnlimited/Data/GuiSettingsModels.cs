@@ -16,6 +16,10 @@ public sealed class GuiSettings
     [JsonPropertyName("auto_mode")]
     public bool AutoMode { get; set; }
 
+    /// <summary>true = 深色主题。旧设置文件没有此字段 → 默认 false（浅色 Win11 风）。</summary>
+    [JsonPropertyName("dark_theme")]
+    public bool DarkTheme { get; set; }
+
     [JsonPropertyName("window_x")]
     public int? WindowX { get; set; }
 
