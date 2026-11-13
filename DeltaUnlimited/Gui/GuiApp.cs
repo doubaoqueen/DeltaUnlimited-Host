@@ -14,6 +14,15 @@ public static class GuiApp
 {
     public static void Run(DataStore store, string repoRoot, RuntimeConfig runtime, string version)
     {
+        // 单实例守护：重复双击不再堆叠托盘实例（2026-11-14 八连托盘事件的教训）
+        using var single = new Mutex(initiallyOwned: true, @"Local\DeltaUnlimited.SingleInstance", out var createdNew);
+        if (!createdNew)
+        {
+            MessageBox.Show("DeltaUnlimited 已在运行（可能收在系统托盘）——双击托盘图标即可恢复面板。",
+                "DeltaUnlimited", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
         ConsoleRelay.Attach();
         FreeConsole();                     // 脱离控制台：cmd 启动 → 输出只进 GUI 日志窗；双击 exe → 黑窗口立即消失
         ConsoleRelay.SuppressConsoleOutput(); // 原控制台写入器换 Null，日志只走 GUI（不每行写无效句柄）

@@ -25,13 +25,14 @@ public sealed class MainForm : Form
     private readonly ToolStripMenuItem _trayStop;
     private readonly ComboBox _workflowBox;
     private readonly ComboBox _modeBox;
-    private readonly Button _startButton;
-    private readonly Button _stopButton;
+    private readonly SoftButton _startButton;
+    private readonly SoftButton _stopButton;
     private readonly TextBox _logBox;
     private readonly ToolStripStatusLabel _statusLabel;
     private readonly StatusStrip _statusStrip;
     private readonly Panel _pausePanel;
     private readonly Label _pauseLabel;
+    private SoftPanel _logCard = null!, _cmdDescCard = null!, _cmdPreviewCard = null!;
     private bool _reallyExit;
     private bool _trayHintShown;
     private bool _running;
@@ -43,7 +44,7 @@ public sealed class MainForm : Form
     // ---- 主题相关的结构引用（ApplyTheme 按"角色"上色）----
     private FlowLayoutPanel _topBar = null!;
     private Label _titleLabel = null!;
-    private Button _themeButton = null!;
+    private SoftButton _themeButton = null!;
     private SplitContainer _split = null!;
     private TableLayoutPanel _cmdSidebar = null!;
 
@@ -52,10 +53,10 @@ public sealed class MainForm : Form
     private ComboBox _cmdGroupBox = null!;
     private ComboBox _cmdBox = null!;
     private TextBox _cmdDescBox = null!;
-    private FlowLayoutPanel _cmdArgsPanel = null!;
+    private SoftFlowPanel _cmdArgsPanel = null!;
     private TextBox _cmdPreviewBox = null!;
-    private Button _cmdRunButton = null!;
-    private Button _cmdStopButton = null!;
+    private SoftButton _cmdRunButton = null!;
+    private SoftButton _cmdStopButton = null!;
     private readonly ToolTip _cmdTips = new();
     private readonly List<GuiCommandDef> _cmdVisible = new();
     private GuiCommandDef? _cmdCurrent;
@@ -105,9 +106,11 @@ public sealed class MainForm : Form
             Font = new Font("Consolas", 9.75f),
             BorderStyle = BorderStyle.None,
         };
+        _logCard = new SoftPanel { Dock = DockStyle.Fill, Padding = new Padding(8), BackColor = _theme.LogBack };
+        _logCard.Controls.Add(_logBox);
         _split = new SplitContainer { Dock = DockStyle.Fill, FixedPanel = FixedPanel.Panel1 };
         _split.Panel1MinSize = 280;
-        _split.Panel2.Controls.Add(_logBox);
+        _split.Panel2.Controls.Add(_logCard);
 
         // ---- 状态栏 ----
         _statusStrip = new StatusStrip { SizingGrip = false };
@@ -116,9 +119,9 @@ public sealed class MainForm : Form
 
         // ---- 暂停面板（半自动人工确认点，非模态：急停按钮始终可用）----
         _pausePanel = new Panel { Dock = DockStyle.Top, Height = 60, Visible = false };
-        var abortButton = new Button { Text = "⛔ 中止链路", Dock = DockStyle.Right, Width = 130, Font = new Font(Font.FontFamily, 10f) };
+        var abortButton = new SoftButton { Text = "⛔ 中止链路", Dock = DockStyle.Right, Width = 130, Font = new Font(Font.FontFamily, 10f) };
         abortButton.Click += (_, _) => AbortFromPause();
-        var contButton = new Button { Text = "▶ 继续", Dock = DockStyle.Right, Width = 110, Font = new Font(Font.FontFamily, 10f) };
+        var contButton = new SoftButton { Text = "▶ 继续", Dock = DockStyle.Right, Width = 110, Font = new Font(Font.FontFamily, 10f) };
         contButton.Click += (_, _) => { PauseGate.Resume(); _pausePanel.Visible = false; };
         _pauseLabel = new Label { Text = "", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Font = new Font(Font.FontFamily, 10f) };
         _pausePanel.Controls.Add(_pauseLabel);
@@ -130,7 +133,7 @@ public sealed class MainForm : Form
         _titleLabel = new Label { Text = "DeltaUnlimited", AutoSize = true, Margin = new Padding(0, 8, 18, 0), Font = new Font(Font.FontFamily, 12.5f, FontStyle.Bold) };
         _topBar.Controls.Add(_titleLabel);
 
-        _themeButton = new Button { Text = "🌙 深色", Width = 92, Height = 34, Margin = new Padding(0, 1, 14, 0) };
+        _themeButton = new SoftButton { Text = "🌙 深色", Width = 92, Height = 34, Margin = new Padding(0, 1, 14, 0) };
         _themeButton.Click += (_, _) => ToggleTheme();
         _topBar.Controls.Add(_themeButton);
 
@@ -150,11 +153,11 @@ public sealed class MainForm : Form
         _modeBox.SelectedIndex = _settings.AutoMode ? 1 : 0;
         _topBar.Controls.Add(_modeBox);
 
-        _startButton = new Button { Text = "▶ 开始", Width = 120, Height = 34, Margin = new Padding(20, 1, 0, 0), Font = new Font(Font.FontFamily, 10f, FontStyle.Bold) };
+        _startButton = new SoftButton { Text = "▶ 开始", Width = 120, Height = 34, Margin = new Padding(20, 1, 0, 0), Font = new Font(Font.FontFamily, 10f, FontStyle.Bold) };
         _startButton.Click += (_, _) => StartChain();
-        _stopButton = new Button { Text = "⛔ 急停", Width = 104, Height = 34, Enabled = false, Margin = new Padding(8, 1, 0, 0), Font = new Font(Font.FontFamily, 10f, FontStyle.Bold) };
+        _stopButton = new SoftButton { Text = "⛔ 急停", Width = 104, Height = 34, Enabled = false, Margin = new Padding(8, 1, 0, 0), Font = new Font(Font.FontFamily, 10f, FontStyle.Bold) };
         _stopButton.Click += (_, _) => CommandUtil.RequestStop();
-        var clearButton = new Button { Text = "清空日志", Width = 92, Height = 34, Margin = new Padding(8, 1, 0, 0), Font = new Font(Font.FontFamily, 10f) };
+        var clearButton = new SoftButton { Text = "清空日志", Width = 92, Height = 34, Margin = new Padding(8, 1, 0, 0), Font = new Font(Font.FontFamily, 10f) };
         clearButton.Click += (_, _) => { _logBox.Clear(); };
         _topBar.Controls.Add(_startButton);
         _topBar.Controls.Add(_stopButton);
@@ -235,26 +238,30 @@ public sealed class MainForm : Form
         _cmdBox.SelectedIndexChanged += (_, _) => OnCommandSelected();
         sidebar.Controls.Add(_cmdBox, 0, 1);
 
-        var rowBtn = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = new Padding(0) };
-        _cmdRunButton = new Button { Text = "▶ 运行命令", Width = 128, Height = 34, Margin = new Padding(0, 4, 8, 0), Font = new Font(Font.FontFamily, 10f, FontStyle.Bold) };
+        var rowBtn = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = new Padding(0), BackColor = Color.Transparent };
+        _cmdRunButton = new SoftButton { Text = "▶ 运行命令", Width = 128, Height = 34, Margin = new Padding(0, 4, 8, 0), Font = new Font(Font.FontFamily, 10f, FontStyle.Bold) };
         _cmdRunButton.Click += (_, _) => RunCommand();
         rowBtn.Controls.Add(_cmdRunButton);
-        _cmdStopButton = new Button { Text = "⛔ 停止", Width = 108, Height = 34, Enabled = false, Margin = new Padding(0, 4, 0, 0), Font = f };
+        _cmdStopButton = new SoftButton { Text = "⛔ 停止", Width = 108, Height = 34, Enabled = false, Margin = new Padding(0, 4, 0, 0), Font = f };
         _cmdStopButton.Click += (_, _) => StopCommand();
         rowBtn.Controls.Add(_cmdStopButton);
         sidebar.Controls.Add(rowBtn, 0, 2);
 
-        // 说明（人话描述 + 用法提示 + 风险警示）
-        _cmdDescBox = new TextBox { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, BorderStyle = BorderStyle.FixedSingle, Font = new Font("Microsoft YaHei UI", 9.75f) };
-        sidebar.Controls.Add(_cmdDescBox, 0, 3);
+        // 说明（圆角卡片包无边框文本）
+        _cmdDescCard = new SoftPanel { Dock = DockStyle.Fill, Padding = new Padding(8, 6, 8, 6) };
+        _cmdDescBox = new TextBox { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, BorderStyle = BorderStyle.None, Font = new Font("Microsoft YaHei UI", 9.75f) };
+        _cmdDescCard.Controls.Add(_cmdDescBox);
+        sidebar.Controls.Add(_cmdDescCard, 0, 3);
 
-        // 参数表单（按所选命令动态生成）
-        _cmdArgsPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true, AutoScroll = true, BorderStyle = BorderStyle.FixedSingle };
+        // 参数表单（按所选命令动态生成，圆角卡）
+        _cmdArgsPanel = new SoftFlowPanel { Dock = DockStyle.Fill, WrapContents = true, AutoScroll = true, Padding = new Padding(6, 4, 6, 4) };
         sidebar.Controls.Add(_cmdArgsPanel, 0, 4);
 
-        // 命令行预览——预览的就是会跑的
-        _cmdPreviewBox = new TextBox { Dock = DockStyle.Fill, ReadOnly = true, Font = new Font("Consolas", 9.75f), BorderStyle = BorderStyle.FixedSingle };
-        sidebar.Controls.Add(_cmdPreviewBox, 0, 5);
+        // 命令行预览——预览的就是会跑的（圆角卡）
+        _cmdPreviewCard = new SoftPanel { Dock = DockStyle.Fill, Padding = new Padding(8, 5, 8, 5) };
+        _cmdPreviewBox = new TextBox { Dock = DockStyle.Fill, ReadOnly = true, Font = new Font("Consolas", 9.75f), BorderStyle = BorderStyle.None };
+        _cmdPreviewCard.Controls.Add(_cmdPreviewBox);
+        sidebar.Controls.Add(_cmdPreviewCard, 0, 5);
 
         PopulateCommands();
         return sidebar;
@@ -430,14 +437,12 @@ public sealed class MainForm : Form
         ApplyTheme();
     }
 
-    private void StyleButton(Button b, bool accent = false, bool danger = false)
+    private void StyleButton(SoftButton b, bool accent = false, bool danger = false)
     {
-        b.FlatStyle = FlatStyle.Flat;
-        b.FlatAppearance.BorderSize = 1;
-        b.FlatAppearance.BorderColor = _theme.Border;
-        b.FlatAppearance.MouseOverBackColor = _theme.IsDark ? _theme.Card : Color.FromArgb(233, 237, 242);
+        b.BorderColor = _theme.Border;
         b.BackColor = accent ? _theme.Accent : _theme.Card;
         b.ForeColor = danger ? _theme.Danger : accent ? _theme.AccentText : _theme.Text;
+        b.Invalidate();
     }
 
     /// <summary>按"角色"给全部控件上色——换主题只换调色板，结构不动。</summary>
@@ -454,12 +459,17 @@ public sealed class MainForm : Form
             {
                 case Label l: l.ForeColor = l == _titleLabel ? t.Accent : t.Text; break;
                 case ComboBox cb: cb.BackColor = t.FieldBack; cb.ForeColor = t.Text; break;
-                case Button b: StyleButton(b, accent: b == _startButton, danger: b == _stopButton); break;
+                case SoftButton sb: StyleButton(sb, accent: sb == _startButton, danger: sb == _stopButton); break;
             }
         }
         _themeButton.Text = t.IsDark ? "☀ 浅色" : "🌙 深色";
 
-        // 日志窗
+        // 日志窗（圆角卡）
+        _split.Panel1.BackColor = t.Panel;
+        _split.Panel2.BackColor = t.Window;
+        _logCard.BackColor = t.LogBack;
+        _logCard.BorderColor = t.Border;
+        _logCard.Invalidate();
         _logBox.BackColor = t.LogBack;
         _logBox.ForeColor = t.LogText;
 
@@ -467,14 +477,16 @@ public sealed class MainForm : Form
         _pausePanel.BackColor = t.IsDark ? Color.FromArgb(74, 58, 16) : Color.FromArgb(255, 244, 214);
         _pauseLabel.ForeColor = t.IsDark ? Color.FromArgb(255, 220, 120) : Color.FromArgb(110, 78, 0);
         foreach (Control c in _pausePanel.Controls)
-            if (c is Button b) StyleButton(b);
+            if (c is SoftButton sb) StyleButton(sb);
 
         // 命令侧栏
         _cmdSidebar.BackColor = t.Panel;
         _cmdGroupBox.BackColor = t.FieldBack; _cmdGroupBox.ForeColor = t.Text;
         _cmdBox.BackColor = t.FieldBack; _cmdBox.ForeColor = t.Text;
+        _cmdDescCard.BackColor = t.Card; _cmdDescCard.BorderColor = t.Border; _cmdDescCard.Invalidate();
         _cmdDescBox.BackColor = t.Card; _cmdDescBox.ForeColor = t.Text;
-        _cmdArgsPanel.BackColor = t.Card;
+        _cmdArgsPanel.BackColor = t.Card; _cmdArgsPanel.BorderColor = t.Border; _cmdArgsPanel.Invalidate();
+        _cmdPreviewCard.BackColor = t.LogBack; _cmdPreviewCard.BorderColor = t.Border; _cmdPreviewCard.Invalidate();
         _cmdPreviewBox.BackColor = t.LogBack; _cmdPreviewBox.ForeColor = t.LogText;
         foreach (Control c in _cmdArgsPanel.Controls)
         {
