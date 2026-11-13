@@ -3,6 +3,7 @@ using System.Threading;
 using System.Windows.Forms;
 using DeltaUnlimited.Data;
 using DeltaUnlimited.Input;
+using DeltaUnlimited.Overlay;
 using DeltaUnlimited.Vision.Ocr;
 
 namespace DeltaUnlimited.Gui;
@@ -27,7 +28,16 @@ public static class GuiApp
         {
             try { Application.SetHighDpiMode(HighDpiMode.PerMonitorV2); }
             catch { /* 已被其它组件设置则忽略 */ }
-            Application.Run(new MainForm(store, repoRoot));
+            try
+            {
+                Application.Run(new MainForm(store, repoRoot));
+            }
+            catch (Exception ex)
+            {
+                // WinExe 没有控制台——启动失败必须弹窗+落日志，绝不无声死亡
+                Logger.Error($"❌ GUI 启动失败：{ex}");
+                MessageBox.Show($"GUI 启动失败：{ex.Message}\n\n详情见 logs/ 目录日志", "DeltaUnlimited", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         });
         ui.SetApartmentState(ApartmentState.STA);
         ui.Start();

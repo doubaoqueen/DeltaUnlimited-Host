@@ -109,10 +109,6 @@ public sealed class MainForm : Form
         _split.Panel1MinSize = 280;
         _split.Panel2.Controls.Add(_logBox);
 
-        // ---- 命令侧栏（左侧）----
-        var cmdSidebar = BuildCommandSidebar();
-        _split.Panel1.Controls.Add(cmdSidebar);
-
         // ---- 状态栏 ----
         _statusStrip = new StatusStrip { SizingGrip = false };
         _statusLabel = new ToolStripStatusLabel("就绪 —— 选择工作流后点开始；急停随时有效");
@@ -163,6 +159,10 @@ public sealed class MainForm : Form
         _topBar.Controls.Add(_startButton);
         _topBar.Controls.Add(_stopButton);
         _topBar.Controls.Add(clearButton);
+
+        // ---- 命令侧栏（左侧）——必须最后构建：PopulateCommands 的事件链会触及顶栏按钮与状态栏 ----
+        var cmdSidebar = BuildCommandSidebar();
+        _split.Panel1.Controls.Add(cmdSidebar);
 
         // ---- 加入窗体（停靠处理顺序 = 后加者靠上：顶栏 → 暂停面板 → 主分栏 → 状态栏）----
         Controls.Add(_split);
