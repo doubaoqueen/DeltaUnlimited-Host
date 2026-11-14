@@ -59,7 +59,7 @@ sc.exe delete MuMuRemoteService
 
 1. **卸载软件永远用卸载程序**，删文件夹只是删"家具"；驱动、服务、注册表是"户口"，都不在应用自己的文件夹里；
 2. **模拟器/虚拟化类软件重点盯防**（MuMu/雷电/夜神/VirtualBox/VMware/Docker）：它们会装虚拟设备驱动，卸载器自己也经常漏；
-3. 卸载后花一分钟验收：设备管理器（含隐藏设备的虚拟适配器）、`Get-Service`、`Get-WindowsDriver -Online`、`ProgramData`/`AppData\Local` 残留文件夹；
+3. 卸载后花一分钟验收：设备管理器（含隐藏设备的虚拟适配器）、`Get-Service`、`Get-WindowsDriver -Online`、`ProgramData`/`AppData\Local` 残留文件夹、**`HKCU/HKLM Run` 启动键**（2026-11-14 补刀：`MuMuNxMain`/`MuMuPlayerService` 两条遗民键在首轮清剿漏网两周，指向已删除文件）；
 4. 排查"游戏启动黑屏"先看两个事件：`System` 日志里 `Display 4107` 与 `Kernel-PnP 219` **时间贴近** = 有虚拟显示设备在切模式时捣乱；有 4101/TDR 才是显卡驱动崩；
 5. 日常缓解：游戏用"无边框窗口"减少独占全屏的模式切换（对 DeltaUnlimited 还顺带满足窗口化要求）。
 
