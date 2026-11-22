@@ -231,13 +231,15 @@ public sealed class MainForm : Form
         sidebar.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));   // 命令行预览
 
         _cmdGroupBox = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList, Font = f };
+        _cmdGroupBox.Items.Add("全部"); // 首项：不按分组过滤，全部命令一屏可见（airecord 找不到事件的教训）
         foreach (var g in _cmdCatalog.Groups) _cmdGroupBox.Items.Add(g.Title);
         if (_cmdGroupBox.Items.Count > 0) _cmdGroupBox.SelectedIndex = 0;
         _cmdGroupBox.SelectedIndexChanged += (_, _) => PopulateCommands();
         sidebar.Controls.Add(_cmdGroupBox, 0, 0);
 
-        _cmdBox = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList, Font = f };
+        _cmdBox = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDown, Font = f, AutoCompleteMode = AutoCompleteMode.SuggestAppend, AutoCompleteSource = AutoCompleteSource.ListItems };
         _cmdBox.SelectedIndexChanged += (_, _) => OnCommandSelected();
+        _cmdBox.TextChanged += (_, _) => OnCommandSelected();
         sidebar.Controls.Add(_cmdBox, 0, 1);
 
         var rowBtn = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = new Padding(0), BackColor = Color.Transparent };
@@ -274,8 +276,13 @@ public sealed class MainForm : Form
         _cmdVisible.Clear();
         _cmdBox.Items.Clear();
         string? title = _cmdGroupBox.SelectedItem as string;
-        var groupId = _cmdCatalog.Groups.FirstOrDefault(g => g.Title == title)?.Id ?? "";
-        _cmdVisible.AddRange(_cmdCatalog.Commands.Where(c => c.Group == groupId));
+        IEnumerable<GuiCommandDef> defs = _cmdCatalog.Commands;
+        if (title is not null && title != "全部")
+        {
+            var groupId = _cmdCatalog.Groups.FirstOrDefault(g => g.Title == title)?.Id ?? "";
+            defs = defs.Where(c => c.Group == groupId);
+        }
+        _cmdVisible.AddRange(defs);
         foreach (var d in _cmdVisible) _cmdBox.Items.Add(DisplayName(d));
         if (_cmdBox.Items.Count > 0) _cmdBox.SelectedIndex = 0;
     }
@@ -285,17 +292,26 @@ public sealed class MainForm : Form
 
     private void OnCommandSelected()
     {
-        _cmdCurrent = _cmdBox.SelectedIndex >= 0 && _cmdBox.SelectedIndex < _cmdVisible.Count ? _cmdVisible[_cmdBox.SelectedIndex] : null;
+        // 支持两种选择：下拉精确选中（Index 有效）或手打文本精确匹配（配合输入联想）
+        GuiCommandDef? def = null;
+        if (_cmdBox.SelectedIndex >= 0 && _cmdBox.SelectedIndex < _cmdVisible.Count)
+            def = _cmdVisible[_cmdBox.SelectedIndex];
+        else
+        {
+            var typed = _cmdBox.Text.Trim();
+            def = _cmdVisible.FirstOrDefault(d => DisplayName(d) == typed);
+        }
+        _cmdCurrent = def;
         _cmdArgsPanel.Controls.Clear();
         _cmdTips.RemoveAll();
         if (_cmdCurrent is null)
         {
-            _cmdDescBox.Text = "（该分组没有命令）";
+            _cmdDescBox.Text = _cmdBox.Text.Trim().Length == 0 ? "" : "（没有匹配的命令——从列表里选一个）";
             UpdateCmdPreview();
             UpdateBusyUi();
             return;
         }
-        var def = _cmdCurrent;
+        def = _cmdCurrent!;
         string warn = def.Exclusive ? "\r\n⚠ 会动键鼠/抢占游戏：链路运行期间禁止调起。" : "";
         string nostop = def.Stoppable ? "" : "\r\n⚠ 常驻逻辑：无急停检查点，GUI 内不可停止。";
         _cmdDescBox.Text = def.Desc + (def.Note.Length > 0 ? "\r\nℹ " + def.Note : "") + warn + nostop;
@@ -438,7 +454,15 @@ public sealed class MainForm : Form
     private void RunCommand()
     {
         var def = _cmdCurrent;
-        if (def is null || _cmdRunning) return;
+        if (def is null || _cmdRunning)
+        {
+            if (def is null)
+            {
+                _statusLabel.Text = "⚠ 请先在命令列表中选择要运行的命令";
+                Console.WriteLine("⚠ 命令台：未选中任何命令，运行被忽略");
+            }
+            return;
+        }
         if (_running && def.Exclusive)
         {
             _statusLabel.Text = "⚠ 链路运行中，不能调起会动键鼠的命令——先急停链路";
