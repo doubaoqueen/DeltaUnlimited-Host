@@ -308,15 +308,59 @@ public sealed class MainForm : Form
                 ck.CheckedChanged += (_, _) => UpdateCmdPreview();
                 _cmdTips.SetToolTip(ck, a.Desc);
                 _cmdArgsPanel.Controls.Add(ck);
+                continue;
+            }
+            string label = (a.Kind == "flag" ? "--" : "") + a.Name + (a.Required ? "*" : "");
+            var lb = new Label { Text = label, AutoSize = true, Margin = new Padding(4, 9, 4, 0), Font = new Font(Font.FontFamily, 9.75f) };
+            _cmdArgsPanel.Controls.Add(lb);
+            string tooltip = a.Desc + (a.Required ? "（必填）" : "") + (a.Default.Length > 0 ? $"（留空 = {a.Default}）" : "");
+            var f9 = new Font(Font.FontFamily, 9.75f);
+
+            if (a.Source == "file")
+            {
+                // 文件选择器：浏览后自动转为仓库相对路径
+                var tb = new TextBox { Width = 118, PlaceholderText = a.Default, Margin = new Padding(0, 6, 0, 0), Font = f9 };
+                tb.TextChanged += (_, _) => UpdateCmdPreview();
+                _cmdTips.SetToolTip(tb, tooltip);
+                _cmdArgsPanel.Controls.Add(tb);
+                var browse = new SoftButton { Text = "…", Width = 28, Height = 26, Margin = new Padding(3, 5, 0, 0), Font = f9 };
+                browse.Click += (_, _) =>
+                {
+                    using var dlg = new OpenFileDialog { Title = "选择 " + a.Desc, Filter = "常用|*.png;*.jpg;*.jpeg;*.bmp;*.onnx|所有文件|*.*" };
+                    if (dlg.ShowDialog(this) == DialogResult.OK) tb.Text = ToRelative(dlg.FileName);
+                };
+                _cmdTips.SetToolTip(browse, "浏览文件（自动转为仓库相对路径）");
+                _cmdArgsPanel.Controls.Add(browse);
+            }
+            else if (a.Options.Count > 0)
+            {
+                // 固定选项：防拼错的下拉
+                var cmb = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 168, DropDownWidth = 200, Font = f9, Margin = new Padding(0, 6, 0, 0) };
+                foreach (var o in a.Options) cmb.Items.Add(o);
+                cmb.SelectedIndex = 0;
+                cmb.SelectedIndexChanged += (_, _) => UpdateCmdPreview();
+                _cmdTips.SetToolTip(cmb, tooltip);
+                _cmdArgsPanel.Controls.Add(cmb);
+            }
+            else if (a.Source is "elements" or "keys" or "extracts" or "templates")
+            {
+                // 联想下拉：可输可选，数据来自数据表里的合法值
+                var cmb = new ComboBox { DropDownStyle = ComboBoxStyle.DropDown, Width = 168, DropDownWidth = 230, Font = f9, Margin = new Padding(0, 6, 0, 0) };
+                cmb.Text = a.Default;
+                foreach (var item in ResolveSourceItems(a.Source)) cmb.Items.Add(item);
+                cmb.TextChanged += (_, _) => UpdateCmdPreview();
+                cmb.SelectedIndexChanged += (_, _) => UpdateCmdPreview();
+                string extra = a.Source == "extracts"
+                    ? _store.LoadZeroDamPoints().ExtractPoints.Aggregate("", (acc, p) => acc + (p.Id is null ? "" : $"\r\n{p.Id} = {p.Name}"))
+                    : "";
+                _cmdTips.SetToolTip(cmb, tooltip + extra);
+                _cmdArgsPanel.Controls.Add(cmb);
             }
             else
             {
-                string label = (a.Kind == "flag" ? "--" : "") + a.Name + (a.Required ? "*" : "");
-                var lb = new Label { Text = label, AutoSize = true, Margin = new Padding(4, 9, 4, 0), Font = new Font(Font.FontFamily, 9.75f) };
-                var tb = new TextBox { Width = 168, PlaceholderText = a.Default, Margin = new Padding(0, 6, 0, 0), Font = new Font(Font.FontFamily, 9.75f) };
+                var tb = new TextBox { Width = 168, PlaceholderText = a.Default, Margin = new Padding(0, 6, 0, 0), Font = f9 };
                 tb.TextChanged += (_, _) => UpdateCmdPreview();
-                _cmdTips.SetToolTip(tb, a.Desc + (a.Required ? "（必填）" : "") + (a.Default.Length > 0 ? $"（留空 = {a.Default}）" : ""));
-                _cmdArgsPanel.Controls.Add(lb);
+                _cmdTips.SetToolTip(tb, tooltip);
                 _cmdArgsPanel.Controls.Add(tb);
             }
         }
@@ -325,7 +369,8 @@ public sealed class MainForm : Form
         ApplyTheme(); // 动态控件按当前主题上色
     }
 
-    /// <summary>按控件类型分流收集当前表单值（与 def.Args 顺序一一对应）。</summary>
+    /// <summary>按控件类型分流收集当前表单值（与 def.Args 顺序一一对应；
+    /// ComboBox 的 Text 兼容"下拉选中"与"手打"两种输入）。</summary>
     private (List<string> Values, List<bool> Switches) CollectCurrentValues()
     {
         var values = new List<string>();
@@ -333,9 +378,47 @@ public sealed class MainForm : Form
         foreach (var c in _cmdArgsPanel.Controls)
         {
             if (c is TextBox tb) values.Add(tb.Text);
+            else if (c is ComboBox cb) values.Add(cb.Text);
             else if (c is CheckBox ck) switches.Add(ck.Checked);
         }
         return (values, switches);
+    }
+
+    /// <summary>绝对路径 → 仓库相对路径（仓库外则保持原样；命令侧 Path.Combine 对绝对路径也兼容）。</summary>
+    private string ToRelative(string path)
+    {
+        try
+        {
+            var full = Path.GetFullPath(path);
+            var root = Path.TrimEndingDirectorySeparator(_repoRoot) + Path.DirectorySeparatorChar;
+            if (full.StartsWith(root, StringComparison.OrdinalIgnoreCase)) return full[root.Length..];
+        }
+        catch { /* 非法路径保持原样 */ }
+        return path;
+    }
+
+    /// <summary>参数联想下拉的数据源——全部来自数据表里的合法值，替代手打。</summary>
+    private IReadOnlyList<string> ResolveSourceItems(string source)
+    {
+        try
+        {
+            return source switch
+            {
+                "elements" => _store.LoadElements().Elements.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase).ToList(),
+                "keys" => _store.LoadGameOps().KeyMap.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase).ToList(),
+                "extracts" => _store.LoadZeroDamPoints().ExtractPoints.Where(p => !string.IsNullOrEmpty(p.Id)).Select(p => p.Id!).ToList(),
+                "templates" => Directory.Exists(Path.Combine(_repoRoot, "assets", "templates"))
+                    ? Directory.GetFiles(Path.Combine(_repoRoot, "assets", "templates"), "*.*", SearchOption.AllDirectories)
+                        .Select(ToRelative).ToList()
+                    : Array.Empty<string>(),
+                _ => Array.Empty<string>(),
+            };
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"⚠ 参数选项加载失败（{source}）：{ex.Message}");
+            return Array.Empty<string>();
+        }
     }
 
     private void UpdateCmdPreview()

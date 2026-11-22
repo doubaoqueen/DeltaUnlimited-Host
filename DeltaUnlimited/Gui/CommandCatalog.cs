@@ -15,6 +15,7 @@ public static class CommandCatalog
     };
 
     private static readonly string[] ValidKinds = { "arg", "argq", "flag", "switch" };
+    private static readonly string[] ValidSources = { "", "elements", "keys", "extracts", "file", "templates" };
 
     public static GuiCommandCatalog Load(string repoRoot)
     {
@@ -51,6 +52,7 @@ public static class CommandCatalog
             {
                 if (string.IsNullOrWhiteSpace(a.Name)) throw new InvalidOperationException($"命令 {c.Verb} 存在无名参数");
                 if (!ValidKinds.Contains(a.Kind)) throw new InvalidOperationException($"命令 {c.Verb} 参数 {a.Name} 种类非法: {a.Kind}");
+                if (!ValidSources.Contains(a.Source)) throw new InvalidOperationException($"命令 {c.Verb} 参数 {a.Name} 的 source 非法: {a.Source}");
             }
         }
         if (cat.Commands.Count == 0) throw new InvalidOperationException("gui_commands.json 没有任何命令");

@@ -33,7 +33,9 @@ public sealed class GuiCommandDef
 
 /// <summary>单个参数：Kind=arg（位置参数，按空格可拆多 token）/ argq（单 token 位置参数，含空格时整体引号包裹，
 /// 用于时间戳这类"一段是一个值"的输入）/ flag（--名称 值）/ switch（布尔开关，无值）。
-/// Default 是留空时的取值；Required=true 且留空会在运行前被拦下。</summary>
+/// Default 是留空时的取值；Required=true 且留空会在运行前被拦下。
+/// Source 非空时渲染为"可输可选"的联想下拉（元素名/键名/撤离点）或文件选择器（file）；
+/// Options 非空时渲染为固定下拉（防拼错）。</summary>
 public sealed class GuiCommandArg
 {
     public string Name { get; set; } = "";
@@ -41,4 +43,6 @@ public sealed class GuiCommandArg
     public string Default { get; set; } = "";
     public string Kind { get; set; } = "arg";
     public bool Required { get; set; }
+    public string Source { get; set; } = "";
+    public List<string> Options { get; set; } = new();
 }

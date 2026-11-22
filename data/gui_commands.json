@@ -31,8 +31,8 @@
       "verb": "annotate", "group": "diag",
       "desc": "对某个元素跑一次完整识别并画框，验证 screens/elements 标记是否标对。",
       "args": [
-        { "name": "元素名", "desc": "elements.json 里的元素名", "default": "", "kind": "arg", "required": true },
-        { "name": "截图路径", "desc": "留空=现场截游戏画面", "default": "", "kind": "arg" }
+        { "name": "元素名", "desc": "elements.json 里的元素名（下拉可选）", "default": "", "kind": "arg", "required": true, "source": "elements" },
+        { "name": "截图路径", "desc": "留空=现场截游戏画面（可浏览文件）", "default": "", "kind": "arg", "source": "file" }
       ]
     },
     {
@@ -40,7 +40,7 @@
       "desc": "OCR 诊断：列出识别到的全部词 + 关键词严格/候选匹配结果。",
       "note": "调界面标记前先看它实际读成什么字（读错是常态）。",
       "args": [
-        { "name": "截图路径", "desc": "要识别的图片", "default": "", "kind": "arg", "required": true },
+        { "name": "截图路径", "desc": "要识别的图片", "default": "", "kind": "arg", "required": true, "source": "file" },
         { "name": "关键词", "desc": "多个用空格隔开", "default": "", "kind": "arg" },
         { "name": "region", "desc": "只识别该区域：x y w h", "default": "", "kind": "flag" }
       ]
@@ -49,8 +49,8 @@
       "verb": "tplprobe", "group": "diag",
       "desc": "模板匹配诊断（静态）：对一张截图匹配一个模板，报置信度和位置。",
       "args": [
-        { "name": "截图路径", "desc": "被搜索的图", "default": "", "kind": "arg", "required": true },
-        { "name": "模板路径", "desc": "assets 下的模板小图", "default": "", "kind": "arg", "required": true },
+        { "name": "截图路径", "desc": "被搜索的图", "default": "", "kind": "arg", "required": true, "source": "file" },
+        { "name": "模板路径", "desc": "assets 下的模板小图", "default": "", "kind": "arg", "required": true, "source": "file" },
         { "name": "阈值", "desc": "合格线", "default": "0.80", "kind": "arg" }
       ]
     },
@@ -60,7 +60,7 @@
       "note": "游戏开着时用；停止按钮随时可停。",
       "fixedArgs": ["--live"],
       "args": [
-        { "name": "模板路径", "desc": "assets 下的模板小图", "default": "", "kind": "arg", "required": true },
+        { "name": "模板路径", "desc": "assets 下的模板小图", "default": "", "kind": "arg", "required": true, "source": "file" },
         { "name": "阈值", "desc": "合格线", "default": "0.80", "kind": "arg" },
         { "name": "区域", "desc": "只在区域内找：x y w h（留空=全屏找）", "default": "", "kind": "flag" }
       ]
@@ -73,7 +73,7 @@
         { "name": "y", "desc": "左上角 y", "default": "", "kind": "arg", "required": true },
         { "name": "w", "desc": "宽", "default": "", "kind": "arg", "required": true },
         { "name": "h", "desc": "高", "default": "", "kind": "arg", "required": true },
-        { "name": "源图路径", "desc": "从哪张截图裁", "default": "", "kind": "arg", "required": true },
+        { "name": "源图路径", "desc": "从哪张截图裁", "default": "", "kind": "arg", "required": true, "source": "file" },
         { "name": "输出路径", "desc": "留空=自动命名", "default": "", "kind": "arg" },
         { "name": "缩放", "desc": "留空=原尺寸", "default": "", "kind": "arg" }
       ]
@@ -82,7 +82,7 @@
       "verb": "aieval", "group": "diag",
       "desc": "AI 离线评估：金标集跑混淆矩阵 + macro-F1（上线门禁的离线版）。",
       "args": [
-        { "name": "模型 onnx", "desc": "留空=当前配置的模型", "default": "", "kind": "arg" },
+        { "name": "模型 onnx", "desc": "留空=当前配置的模型（可浏览文件）", "default": "", "kind": "arg", "source": "file" },
         { "name": "数据集目录", "desc": "留空=金标集", "default": "", "kind": "arg" }
       ]
     },
@@ -90,7 +90,7 @@
       "verb": "localize", "group": "diag",
       "desc": "单帧定位诊断：地形匹配算出玩家位置（小地图 ↔ 官方底图）。",
       "args": [
-        { "name": "截图路径", "desc": "留空=实时截游戏画面", "default": "", "kind": "arg" },
+        { "name": "截图路径", "desc": "留空=实时截游戏画面（可浏览文件）", "default": "", "kind": "arg", "source": "file" },
         { "name": "map", "desc": "底图相对路径（留空=默认零号大坝）", "default": "", "kind": "flag" },
         { "name": "scales", "desc": "尺度列表，逗号分隔（如 150,180,210）", "default": "", "kind": "flag" },
         { "name": "topk", "desc": "候选数", "default": "3", "kind": "flag" },
@@ -115,7 +115,7 @@
       "desc": "真实点击一个元素（点前/点后自动截图，默认 3 秒倒计时给你准备）。",
       "note": "会动鼠标——别在链路运行时调它。",
       "args": [
-        { "name": "元素名", "desc": "elements.json 里的元素名", "default": "", "kind": "arg", "required": true },
+        { "name": "元素名", "desc": "elements.json 里的元素名（下拉可选）", "default": "", "kind": "arg", "required": true, "source": "elements" },
         { "name": "窗口关键字", "desc": "留空=默认", "default": "", "kind": "arg" }
       ]
     },
@@ -140,7 +140,7 @@
       "verb": "click_operator", "group": "input", "exclusive": true,
       "desc": "自动选干员：定位类型标签（间距推算）并点击对应头像。",
       "args": [
-        { "name": "类型", "desc": "突击 / 支援 / 工程 / 侦察", "default": "", "kind": "arg", "required": true },
+        { "name": "类型", "desc": "干员类型（下拉可选）", "default": "", "kind": "arg", "required": true, "options": ["突击", "支援", "工程", "侦察"] },
         { "name": "序号", "desc": "该类型下第几个（0 起）", "default": "", "kind": "arg", "required": true }
       ]
     },
@@ -148,7 +148,7 @@
       "verb": "hold", "group": "input", "exclusive": true,
       "desc": "长按一个语义键 N 毫秒（帧差验证按没按上）。",
       "args": [
-        { "name": "键名", "desc": "语义键（查 game_ops.json，如 move_forward）", "default": "", "kind": "arg", "required": true },
+        { "name": "键名", "desc": "语义键（下拉可选，映射见 game_ops.json）", "default": "", "kind": "arg", "required": true, "source": "keys" },
         { "name": "毫秒", "desc": "长按时长", "default": "", "kind": "arg", "required": true },
         { "name": "窗口关键字", "desc": "留空=默认", "default": "", "kind": "arg" }
       ]
@@ -187,7 +187,7 @@
       "desc": "自动跑图实验 v1：定位 → 方位伺服 → 撞墙「倒车请注意」脱困；轨迹与回放图落盘 logs/autorun/。",
       "note": "人盯实验、急停常备；会话限额执法中（每日 240 分钟）。侦察周请多跑几局收轨迹。",
       "args": [
-        { "name": "extract", "desc": "目标撤离点（默认 E2）", "default": "E2", "kind": "flag" },
+        { "name": "extract", "desc": "目标撤离点（下拉可选：E1=东区隧道 E2=西区公路口 E3=坝顶丢包 E4=维修通道）", "default": "E2", "kind": "flag", "source": "extracts" },
         { "name": "minutes", "desc": "最长跑几分钟", "default": "10", "kind": "flag" },
         { "name": "arrive-px", "desc": "到达判定半径（px）", "default": "250", "kind": "flag" }
       ]
@@ -197,7 +197,7 @@
       "desc": "素材录制器：零按键录制——正常打游戏，1-2 秒随机存一帧全帧。",
       "note": "长任务。停止按钮=安全落盘退出。游戏素材不出库。",
       "args": [
-        { "name": "map", "desc": "地图标注", "default": "零号大坝", "kind": "flag" },
+        { "name": "map", "desc": "地图标注（下拉可选）", "default": "零号大坝", "kind": "flag", "options": ["零号大坝"] },
         { "name": "season", "desc": "赛季标注", "default": "unknown", "kind": "flag" },
         { "name": "interval", "desc": "固定间隔毫秒（留空=1-2 秒随机）", "default": "", "kind": "flag" },
         { "name": "max-gb", "desc": "磁盘上限 GB", "default": "50", "kind": "flag" }
@@ -208,7 +208,7 @@
       "desc": "可通行性数据采集：你来玩，按 1/2/0/b 实时打标。",
       "note": "采集/标注分离前的老流程；一般用 airecord + ailabel。",
       "args": [
-        { "name": "map", "desc": "地图标注", "default": "零号大坝", "kind": "flag" },
+        { "name": "map", "desc": "地图标注（下拉可选）", "default": "零号大坝", "kind": "flag", "options": ["零号大坝"] },
         { "name": "season", "desc": "赛季标注", "default": "unknown", "kind": "flag" }
       ]
     },

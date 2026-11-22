@@ -55,6 +55,32 @@ public class CommandCatalogTests
     }
 
     [Fact]
+    public void Load_RealRepo_SmartArgsWired()
+    {
+        // 参数智能化：元素名=联想下拉、图片路径=文件选择器、干员类型=固定下拉
+        var cat = LoadReal();
+        var annotate = cat.Commands.First(c => c.Verb == "annotate");
+        Assert.Equal("elements", annotate.Args.First(a => a.Name == "元素名").Source);
+        Assert.Equal("file", annotate.Args.First(a => a.Name == "截图路径").Source);
+        var clickOperator = cat.Commands.First(c => c.Verb == "click_operator");
+        Assert.Contains("突击", clickOperator.Args.First(a => a.Name == "类型").Options);
+        var autorun = cat.Commands.First(c => c.Verb == "autorun_walk");
+        Assert.Equal("extracts", autorun.Args.First(a => a.Name == "extract").Source);
+    }
+
+    [Fact]
+    public void Validate_BadSource_Throws()
+    {
+        var cat = new GuiCommandCatalog
+        {
+            Groups = { new GuiCommandGroup { Id = "g", Title = "G" } },
+            Commands = { new GuiCommandDef { Verb = "v", Group = "g", Desc = "d",
+                Args = { new GuiCommandArg { Name = "a", Kind = "arg", Source = "bogus" } } } },
+        };
+        Assert.Throws<InvalidOperationException>(() => CommandCatalog.Validate(cat));
+    }
+
+    [Fact]
     public void BuildArgs_PositionalSkipEmpty_UsesDefault_RequiredThrows()
     {
         var def = new GuiCommandDef
