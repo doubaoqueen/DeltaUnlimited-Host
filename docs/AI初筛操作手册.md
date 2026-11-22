@@ -26,16 +26,17 @@
 ```bash
 export HF_HUB_CACHE=/mnt/d/hf-cache HF_ENDPOINT=https://hf-mirror.com CC=gcc VLLM_USE_FLASHINFER_SAMPLER=0 VLLM_FLASHINFER_FORCE_TENSOR_REGISTRY=1
 source ~/vllm-env/bin/activate
-vllm serve /mnt/d/hf-cache/models--cyankiwi--Qwen3-VL-8B-Instruct-AWQ-4bit/snapshots/87196f7771efdd7022a8d8f094ac6e063bf87f5c --served-model-name qwen3vl-8b --max-model-len 2048 --gpu-memory-utilization 0.88 --enforce-eager --limit-mm-per-prompt '{"images": 1}' --port 8000
+vllm serve /mnt/d/hf-cache/models--cyankiwi--Qwen3-VL-8B-Instruct-AWQ-4bit/snapshots/87196f7771efdd7022a8d8f094ac6e063bf87f5c --served-model-name qwen3vl-8b --max-model-len 2048 --gpu-memory-utilization 0.86 --enforce-eager --limit-mm-per-prompt '{"images": 1}' --port 8000
 ```
 
 3. **这个窗口别关！** 服务就活在这个窗口里，日志实时滚动——**看进度/判断启动到哪了就是看这个窗口**。可以最小化，但用初筛期间它必须开着（关窗口 = 服务停止）。第一次 export 的几个环境变量只在当前窗口生效，所以每次重启都要完整贴三条。
 4. 启动需 **3-5 分钟**（从 D 盘加载权重 + 编译内核）。**就绪标志**：日志末尾出现 Uvicorn 路由表和 `GET /v1/models 200` 字样。
+   📌 **2026-11-14 修订**：`--gpu-memory-utilization` 由 0.88 → **0.86**。实测（QuantDex 会话全程验证）：当前 Windows 桌面基线显存 ~1.2GB，0.88 档会在 KV cache 分配阶段报 `No available memory for the cache blocks`（0.84 档同样不够，仅剩 0.08GB）；0.86 稳定启动，实测占用 9.7GB，视觉推理正常（生成测试图识别通过）。若仍报错，按 §6 继续降档 0.03。另注意从 Git Bash 启动时 `/mnt/c` 路径会被 MSYS 改写，需 `MSYS_NO_PATHCONV=1` 前缀（cmd/PowerShell 不受影响）。
 
 懒人版（**仅 PowerShell 终端**——在 Windows 终端窗口里整行执行，效果完全等同，窗口同样保持打开。⚠️ **cmd 不认单引号**，会报 `unexpected EOF while looking for matching`，cmd 用户请走上面分步版：先输 `wsl` 回车进入 Linux，再贴三条命令）：
 
 ```bash
-wsl -e bash -c 'export HF_HUB_CACHE=/mnt/d/hf-cache HF_ENDPOINT=https://hf-mirror.com CC=gcc VLLM_USE_FLASHINFER_SAMPLER=0 VLLM_FLASHINFER_FORCE_TENSOR_REGISTRY=1; source ~/vllm-env/bin/activate; exec vllm serve /mnt/d/hf-cache/models--cyankiwi--Qwen3-VL-8B-Instruct-AWQ-4bit/snapshots/87196f7771efdd7022a8d8f094ac6e063bf87f5c --served-model-name qwen3vl-8b --max-model-len 2048 --gpu-memory-utilization 0.88 --enforce-eager --limit-mm-per-prompt "{\"images\": 1}" --port 8000'
+wsl -e bash -c 'export HF_HUB_CACHE=/mnt/d/hf-cache HF_ENDPOINT=https://hf-mirror.com CC=gcc VLLM_USE_FLASHINFER_SAMPLER=0 VLLM_FLASHINFER_FORCE_TENSOR_REGISTRY=1; source ~/vllm-env/bin/activate; exec vllm serve /mnt/d/hf-cache/models--cyankiwi--Qwen3-VL-8B-Instruct-AWQ-4bit/snapshots/87196f7771efdd7022a8d8f094ac6e063bf87f5c --served-model-name qwen3vl-8b --max-model-len 2048 --gpu-memory-utilization 0.86 --enforce-eager --limit-mm-per-prompt "{\"images\": 1}" --port 8000'
 ```
 
 ### 1.3 验证存活

@@ -5,6 +5,7 @@ using System.Windows.Forms;
 using DeltaUnlimited.Cli;
 using DeltaUnlimited.Cli.Commands;
 using DeltaUnlimited.Data;
+using DeltaUnlimited.Overlay;
 
 namespace DeltaUnlimited.Gui;
 
@@ -76,6 +77,7 @@ public sealed class MainForm : Form
         try { catalog = CommandCatalog.Load(_repoRoot); }
         catch (Exception ex) { Console.Error.WriteLine($"⚠ 命令台目录加载失败（命令台为空）：{ex.Message}"); }
         _cmdCatalog = catalog ?? new GuiCommandCatalog { Groups = { new GuiCommandGroup { Id = "_none", Title = "（目录加载失败）" } } };
+        Logger.Info($"命令台目录：{_cmdCatalog.Groups.Count} 组 / {_cmdCatalog.Commands.Count} 条命令（root={_repoRoot}）");
 
         Text = "DeltaUnlimited 控制面板";
         StartPosition = FormStartPosition.CenterScreen;
@@ -357,6 +359,7 @@ public sealed class MainForm : Form
         if (_running && def.Exclusive)
         {
             _statusLabel.Text = "⚠ 链路运行中，不能调起会动键鼠的命令——先急停链路";
+            Console.WriteLine($"⚠ 命令台：链路运行中，{def.Verb} 为会动键鼠的命令，已拦截（先急停链路再运行）");
             return;
         }
         string[] tokens;
@@ -368,6 +371,7 @@ public sealed class MainForm : Form
         catch (ArgumentException ex)
         {
             _statusLabel.Text = "⚠ " + ex.Message;
+            Console.WriteLine("⚠ 命令台：" + ex.Message);
             return;
         }
         if (!_running) CommandUtil.ResetStop(); // 链路没跑时独占急停标志；链路在跑（非独占诊断）时不能动它
@@ -376,6 +380,7 @@ public sealed class MainForm : Form
         string verb = def.Verb;
         _statusLabel.Text = $"▶ 命令运行中：{verb} —— 输出见右侧日志" + (_running ? "（注意：此刻停止会同时急停链路）" : "");
         Console.WriteLine($"—— 命令台运行：{CommandCatalog.BuildPreview(tokens)}");
+        Logger.Info($"命令台运行：{verb}（{string.Join(' ', tokens.Skip(1))}）");
         _cmdTask = Task.Run(() =>
         {
             try
@@ -406,6 +411,7 @@ public sealed class MainForm : Form
         };
         _statusLabel.Text = msg;
         Console.WriteLine($"—— {msg}");
+        Logger.Info($"命令台结束：{verb} → {_cmdOutcome}");
         UpdateBusyUi();
     }
 
@@ -418,13 +424,18 @@ public sealed class MainForm : Form
     }
 
     /// <summary>链路（_running）与命令（_cmdRunning）双状态的按钮可用性调和：
-    /// 开始 vs 运行命令互斥（共用急停标志与键鼠）；独占命令在链路运行期间禁用。</summary>
+    /// 开始 vs 运行命令互斥（共用急停标志与键鼠）；独占命令在链路运行期间禁用。
+    /// 禁用态必须在 ToolTip 里说明原因——"点了没反应"对用户就是 bug。</summary>
     private void UpdateBusyUi()
     {
         bool exclusive = _cmdCurrent?.Exclusive == true;
         _startButton.Enabled = !_running && !_cmdRunning;
         _cmdRunButton.Enabled = _cmdCurrent is not null && !_cmdRunning && (!_running || !exclusive);
         _cmdStopButton.Enabled = _cmdRunning;
+        if (_cmdCurrent is null) _cmdTips.SetToolTip(_cmdRunButton, "");
+        else if (_cmdRunning) _cmdTips.SetToolTip(_cmdRunButton, "命令运行中——先停止当前命令");
+        else if (_running && exclusive) _cmdTips.SetToolTip(_cmdRunButton, "链路运行中——会动键鼠的命令须先急停链路");
+        else _cmdTips.SetToolTip(_cmdRunButton, "");
     }
 
     // ===== 主题 =====
