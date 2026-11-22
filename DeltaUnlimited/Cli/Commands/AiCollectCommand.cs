@@ -49,9 +49,8 @@ public static class AiCollectCommand
             while (true)
             {
                 string? label = null;
-                if (Console.KeyAvailable)
+                if (CommandUtil.TryPeekKey(out var key))
                 {
-                    var key = Console.ReadKey(true).Key;
                     if (key == ConsoleKey.Q) break;
                     label = LabeledKeys.FirstOrDefault(k => k.Key == key).Label;
                 }

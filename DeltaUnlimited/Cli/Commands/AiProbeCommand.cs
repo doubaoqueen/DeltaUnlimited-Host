@@ -56,7 +56,7 @@ public static class AiProbeCommand
         var sw = System.Diagnostics.Stopwatch.StartNew();
         while (!CommandUtil.StopRequested)
         {
-            if (Console.KeyAvailable && Console.ReadKey(true).Key == ConsoleKey.Q) break;
+            if (CommandUtil.TryPeekKey(out var key) && key == ConsoleKey.Q) break;
             using Mat raw = CaptureService.CaptureWindowMat(hwnd, raiseAndWait: false);
             var result = sensor.PredictFull(raw).Result; // PredictFull 内部已做 设计分辨率归一化→裁ROI（勿再自己 Normalize）
             frames++;

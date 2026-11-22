@@ -66,6 +66,25 @@ public static class CommandUtil
     /// <summary>语义键名 → 实际按键（查 game_ops 的按键映射；查不到则按原样返回）。</summary>
     public static string ResolveKey(DataStore data, string semantic)
         => data.LoadGameOps().KeyMap.GetValueOrDefault(semantic, semantic);
+
+    /// <summary>安全探测按键：GUI 进程内运行命令时没有控制台，Console.KeyAvailable 会抛
+    /// InvalidOperationException——这里吞掉并返回 false（"无按键"），命令循环照常跑。
+    /// CLI 场景行为不变（读走一个键并返回）。</summary>
+    public static bool TryPeekKey(out ConsoleKey key)
+    {
+        key = default;
+        try
+        {
+            if (Console.IsInputRedirected) return false;
+            if (!Console.KeyAvailable) return false;
+            key = Console.ReadKey(intercept: true).Key;
+            return true;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException)
+        {
+            return false; // 无控制台（GUI 进程内）或句柄无效：按"无按键"处理
+        }
+    }
 }
 
 /// <summary>GUI 暂停点闸门：链路线程阻塞等待，UI 线程点"继续/中止"放行。

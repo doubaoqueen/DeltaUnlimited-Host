@@ -498,6 +498,7 @@ public sealed class MainForm : Form
             catch (Exception ex)
             {
                 Console.Error.WriteLine(ex.ToString());
+                Logger.Error($"命令台命令异常：{verb} → {ex.GetType().Name}: {ex.Message}"); // 失败原因落盘，不再只活在日志窗
                 _cmdOutcome = "失败";
             }
         });

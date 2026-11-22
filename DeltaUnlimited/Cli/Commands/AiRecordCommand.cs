@@ -52,7 +52,7 @@ public static class AiRecordCommand
         {
             while (!quit && !CommandUtil.StopRequested)
             {
-                quit |= Console.KeyAvailable && Console.ReadKey(true).Key == ConsoleKey.Q;
+                quit |= CommandUtil.TryPeekKey(out var key) && key == ConsoleKey.Q;
                 if (quit) break;
 
                 using Mat raw = CaptureService.CaptureWindowMat(hwnd, raiseAndWait: false);
@@ -89,7 +89,7 @@ public static class AiRecordCommand
                 int wait = fixedInterval ?? Random.Shared.Next(1000, 2001);
                 for (int waited = 0; waited < wait && !quit && !CommandUtil.StopRequested; waited += 50)
                 {
-                    quit |= Console.KeyAvailable && Console.ReadKey(true).Key == ConsoleKey.Q;
+                    quit |= CommandUtil.TryPeekKey(out var k) && k == ConsoleKey.Q;
                     if (!quit) Thread.Sleep(50);
                 }
             }

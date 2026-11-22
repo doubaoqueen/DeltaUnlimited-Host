@@ -59,11 +59,10 @@ public static class TplProbeCommand
                           "）。q 或 Ctrl+C 结束——把目标物拿进/拿出画面，看判定是否跟着翻。");
 
         long frames = 0, hits = 0;
-        bool canWatchKeys = !Console.IsInputRedirected;   // 管道/无控制台环境下只能 Ctrl+C，不能 q
         var sw = System.Diagnostics.Stopwatch.StartNew();
         while (!CommandUtil.StopRequested)
         {
-            if (canWatchKeys && Console.KeyAvailable && Console.ReadKey(true).Key == ConsoleKey.Q) break;
+            if (CommandUtil.TryPeekKey(out var key) && key == ConsoleKey.Q) break;
             using Mat raw = CaptureService.CaptureWindowMat(hwnd, raiseAndWait: false);
             using var norm = FrameTools.Normalize(raw, runtime.DesignWidth, runtime.DesignHeight);
             var r = TemplateMatcher.Match(norm, tplPath, threshold, region);
